@@ -1,0 +1,28 @@
+[package]
+name = "bevy_github_ci_template"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0 OR CC0-1.0"
+
+# Compile with Performance Optimizations:
+# https://bevyengine.org/learn/book/getting-started/setup/#compile-with-performance-optimizations
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+[dependencies]
+bevy = "0.17"
+
+# These lints may be important signals about code quality, but normal Bevy code
+# commonly triggers them and the CI workflow treats them as errors, so we've
+# chosen to allow them in this template.
+#
+# Feel free to delete the following lines.
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
