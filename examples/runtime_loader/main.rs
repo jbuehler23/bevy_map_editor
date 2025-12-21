@@ -1,6 +1,11 @@
-//! Runtime loader example with custom entities
+//! Runtime loader example - the simplest way to load a map
 //!
-//! Demonstrates how to load a map at runtime and spawn custom entity types.
+//! Demonstrates loading a map with just MapHandle and registering custom entities.
+//!
+//! Controls:
+//! - WASD: Pan camera
+//! - Q/E: Zoom in/out
+//! - Space: Print spawned entities
 //!
 //! Run with: cargo run --example runtime_loader -p bevy_map_editor_examples
 
@@ -11,88 +16,99 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "bevy_map_editor - Runtime Loader Example".to_string(),
+                title: "bevy_map - Runtime Loader".to_string(),
                 resolution: (800, 600).into(),
                 ..default()
             }),
             ..default()
         }))
         .add_plugins(MapRuntimePlugin)
-        // Register custom entity types
+        // Register custom entity types that match our map's data types
         .register_map_entity::<Npc>()
-        .register_map_entity::<Chest>()
-        .register_map_entity::<SpawnPoint>()
+        .register_map_entity::<Enemy>()
         .add_systems(Startup, setup)
-        .add_systems(Update, camera_controls)
-        .add_systems(Update, highlight_entities)
+        .add_systems(Update, (camera_controls, print_entities))
         .run();
 }
 
-/// Example NPC entity that can be placed in the map editor
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Spawn camera
+    commands.spawn((Camera2d, Transform::from_xyz(200.0, 300.0, 0.0)));
+
+    // Load the map - that's it!
+    commands.spawn(MapHandle(
+        asset_server.load("maps/example_project.map.json"),
+    ));
+
+    info!("Loading map...");
+    info!("Press SPACE to see spawned entities");
+}
+
+// =============================================================================
+// Custom Entity Types - these match the data types defined in the editor
+// =============================================================================
+
+/// NPC entity - matches the "NPC" data type in example_project.map.json
 #[derive(Component, MapEntity, Debug)]
 #[map_entity(type_name = "NPC")]
 pub struct Npc {
     #[map_prop]
     pub name: String,
-    #[map_prop(default = 100)]
-    pub health: i32,
-}
-
-/// Example chest entity with loot
-#[derive(Component, MapEntity, Debug)]
-#[map_entity(type_name = "Chest")]
-pub struct Chest {
     #[map_prop]
-    pub loot_table: String,
-    #[map_prop(default = false)]
-    pub locked: bool,
-    #[map_prop(default = 1)]
-    pub tier: i32,
+    pub npc_type: String,
 }
 
-/// Player spawn point
+/// Enemy entity - matches the "Enemy" data type in example_project.map.json
 #[derive(Component, MapEntity, Debug)]
-#[map_entity(type_name = "SpawnPoint")]
-pub struct SpawnPoint {
-    #[map_prop(default = 0)]
-    pub spawn_id: i32,
-    #[map_prop(default = false)]
-    pub is_default: bool,
+#[map_entity(type_name = "Enemy")]
+pub struct Enemy {
+    #[map_prop]
+    pub name: String,
+    #[map_prop(default = 1.0)]
+    pub level: f32,
+    #[map_prop(default = 0.0)]
+    pub exp: f32,
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut spawn_events: bevy::ecs::message::MessageWriter<SpawnMapProjectEvent>,
+// =============================================================================
+// Systems
+// =============================================================================
+
+/// Print all spawned entities when Space is pressed
+fn print_entities(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    npcs: Query<(Entity, &Transform, &Npc)>,
+    enemies: Query<(Entity, &Transform, &Enemy)>,
 ) {
-    // Spawn camera
-    commands.spawn((Camera2d, Transform::from_xyz(128.0, 128.0, 0.0)));
+    if keyboard.just_pressed(KeyCode::Space) {
+        info!("=== Spawned Entities ===");
 
-    // Load map project from embedded JSON
-    // In a real game, you would load this from a file or asset
-    let json = include_str!("../assets/maps/example_project.map.json");
-    let project: MapProject = serde_json::from_str(json).expect("Failed to parse map JSON");
+        for (entity, transform, npc) in npcs.iter() {
+            info!(
+                "NPC {:?} at ({:.0}, {:.0}): {} ({})",
+                entity, transform.translation.x, transform.translation.y, npc.name, npc.npc_type
+            );
+        }
 
-    // Load tileset textures
-    let mut textures = TilesetTextures::new();
-    textures.load_from_project(&project, &asset_server);
+        for (entity, transform, enemy) in enemies.iter() {
+            info!(
+                "Enemy {:?} at ({:.0}, {:.0}): {} (lvl {}, {} exp)",
+                entity,
+                transform.translation.x,
+                transform.translation.y,
+                enemy.name,
+                enemy.level,
+                enemy.exp
+            );
+        }
 
-    // Send event to spawn the map
-    // Custom entities (NPC, Chest, SpawnPoint) will be automatically spawned
-    // based on entities defined in the map
-    spawn_events.write(SpawnMapProjectEvent {
-        project,
-        textures,
-        transform: Transform::default(),
-    });
-
-    info!("Map loaded with custom entity types registered!");
-    info!("- NPC entities will have Npc component");
-    info!("- Chest entities will have Chest component");
-    info!("- SpawnPoint entities will have SpawnPoint component");
+        if npcs.is_empty() && enemies.is_empty() {
+            info!("No entities spawned yet - map may still be loading");
+        }
+    }
 }
 
-/// Simple camera controls: WASD to pan, Q/E to zoom
+/// Camera controls: WASD to pan, Q/E to zoom
 fn camera_controls(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut query: Query<(&mut Transform, &mut Projection), With<Camera2d>>,
@@ -125,35 +141,5 @@ fn camera_controls(
             ortho.scale *= 1.0 - time.delta_secs();
         }
         ortho.scale = ortho.scale.clamp(0.25, 4.0);
-    }
-}
-
-/// Highlight spawned entities in the console when pressing Space
-fn highlight_entities(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    npcs: Query<(Entity, &Npc)>,
-    chests: Query<(Entity, &Chest)>,
-    spawn_points: Query<(Entity, &SpawnPoint)>,
-) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        info!("=== Spawned Entities ===");
-
-        for (entity, npc) in npcs.iter() {
-            info!("NPC {:?}: {} (HP: {})", entity, npc.name, npc.health);
-        }
-
-        for (entity, chest) in chests.iter() {
-            info!(
-                "Chest {:?}: loot={}, locked={}, tier={}",
-                entity, chest.loot_table, chest.locked, chest.tier
-            );
-        }
-
-        for (entity, spawn) in spawn_points.iter() {
-            info!(
-                "SpawnPoint {:?}: id={}, default={}",
-                entity, spawn.spawn_id, spawn.is_default
-            );
-        }
     }
 }

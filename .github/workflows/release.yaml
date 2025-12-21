@@ -12,7 +12,7 @@ env:
   binary: bevy_map_editor
   package: bevy_map_editor
   add_binaries_to_github_release: true
-  itch_target: jbuehler23/bevy-map-editor
+#  itch_target: jbuehler23/bevy-map-editor
   use_git_lfs: false
 
 jobs:
