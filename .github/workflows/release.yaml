@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 env:
   binary: bevy_map_editor
   package: bevy_map_editor
