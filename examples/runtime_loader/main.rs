@@ -5,9 +5,7 @@
 //! Run with: cargo run --example runtime_loader -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_core::MapProject;
-use bevy_map_derive::MapEntity;
-use bevy_map_runtime::{MapEntityExt, MapRuntimePlugin, SpawnMapProjectEvent, TilesetTextures};
+use bevy_map::prelude::*;
 
 fn main() {
     App::new()

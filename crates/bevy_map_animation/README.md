@@ -42,7 +42,7 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 ### Defining Animations (Code)
 
 ```rust
-use bevy_map_animation::{SpriteData, AnimationDef, LoopMode};
+use bevy_map::animation::{SpriteData, AnimationDef, LoopMode};
 
 let mut sprite = SpriteData::new("sprites/character.png", 32, 32);
 
@@ -64,7 +64,7 @@ sprite.add_animation("attack", AnimationDef {
 ### Adding Triggers and Windows
 
 ```rust
-use bevy_map_animation::{AnimationDef, AnimationTrigger, AnimationWindow, TriggerPayload};
+use bevy_map::animation::{AnimationDef, AnimationTrigger, AnimationWindow, TriggerPayload};
 
 let mut attack_anim = AnimationDef::new(vec![4, 5, 6, 7, 8], 80, LoopMode::Once);
 
@@ -94,7 +94,7 @@ attack_anim.add_window(AnimationWindow::with_payload(
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_animation::{AnimationTriggerEvent, AnimationWindowEvent, WindowPhase};
+use bevy_map::animation::{AnimationTriggerEvent, AnimationWindowEvent, WindowPhase};
 
 fn handle_triggers(mut events: MessageReader<AnimationTriggerEvent>) {
     for event in events.read() {
@@ -119,7 +119,7 @@ Define custom trigger types for type-safe event handling with Bevy Observers:
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_animation::{AnimationTriggerType, AnimationEventExt};
+use bevy_map::animation::{AnimationTriggerType, AnimationEventExt};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -163,7 +163,7 @@ fn setup(mut commands: Commands) {
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_animation::{AnimatedSprite, SpriteData};
+use bevy_map::prelude::*;
 
 fn play_animation(mut query: Query<&mut AnimatedSprite>) {
     for mut animated in query.iter_mut() {
@@ -189,7 +189,7 @@ commands.spawn((
 Use `AnimatedSpriteHandle` for automatic loading:
 
 ```rust
-use bevy_map_runtime::AnimatedSpriteHandle;
+use bevy_map::runtime::AnimatedSpriteHandle;
 
 commands.spawn((
     AnimatedSpriteHandle::new(
@@ -206,7 +206,7 @@ commands.spawn((
 Add `SpriteAnimationPlugin` for automatic animation updates:
 
 ```rust
-use bevy_map_animation::SpriteAnimationPlugin;
+use bevy_map::prelude::*;
 
 app.add_plugins(SpriteAnimationPlugin);
 ```

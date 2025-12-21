@@ -10,7 +10,7 @@ Automatically implements entity spawning from map data.
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_derive::MapEntity;
+use bevy_map::prelude::*;
 
 #[derive(Component, MapEntity)]
 #[map_entity(type_name = "Enemy")]
@@ -59,8 +59,7 @@ Field must be `Option<Handle<Image>>`.
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_derive::MapEntity;
-use bevy_map_runtime::{MapRuntimePlugin, MapEntityExt};
+use bevy_map::prelude::*;
 
 #[derive(Component, MapEntity)]
 #[map_entity(type_name = "Player")]

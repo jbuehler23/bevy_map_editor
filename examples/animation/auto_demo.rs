@@ -10,8 +10,8 @@
 //! Run with: cargo run --example animation_auto_demo -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_animation::{AnimatedSprite, SpriteAnimationPlugin};
-use bevy_map_runtime::{AnimatedSpriteHandle, MapRuntimePlugin};
+use bevy_map::prelude::*;
+use bevy_map::runtime::AnimatedSpriteHandle;
 
 fn main() {
     App::new()

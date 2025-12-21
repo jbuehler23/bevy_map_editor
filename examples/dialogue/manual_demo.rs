@@ -15,9 +15,9 @@
 //! Run with: cargo run --example dialogue_manual_demo -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_core::MapProject;
-use bevy_map_dialogue::{DialogueNodeType, DialoguePlugin, DialogueRunner, DialogueTree};
-use bevy_map_runtime::MapProjectLoader;
+use bevy_map::dialogue::{DialogueNodeType, DialogueTree};
+use bevy_map::prelude::*;
+use bevy_map::runtime::MapProjectLoader;
 
 fn main() {
     App::new()
@@ -61,7 +61,7 @@ fn setup(
     commands.spawn(Camera2d);
 
     // =========================================================================
-    // MANUAL LOADING: Load the MapProject asset
+    // Load the MapProject asset
     // =========================================================================
     // We load the MapProject and will manually extract the dialogue tree
     let map_handle = asset_server.load("maps/example_project.map.json");
@@ -105,7 +105,7 @@ fn setup_dialogue_when_ready(
     };
 
     // =========================================================================
-    // MANUAL: Get the first dialogue tree from the project
+    // Get the first dialogue tree from the project
     // =========================================================================
     // You have access to the raw DialogueTree data here
     if let Some(tree) = project.dialogues.values().next() {

@@ -1248,6 +1248,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_map"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_map_animation",
+ "bevy_map_autotile",
+ "bevy_map_core",
+ "bevy_map_derive",
+ "bevy_map_dialogue",
+ "bevy_map_runtime",
+ "bevy_map_schema",
+]
+
+[[package]]
 name = "bevy_map_animation"
 version = "0.1.0"
 dependencies = [
@@ -1326,13 +1340,8 @@ version = "0.1.0"
 dependencies = [
  "avian2d",
  "bevy",
- "bevy_map_animation",
- "bevy_map_autotile",
- "bevy_map_core",
- "bevy_map_derive",
- "bevy_map_dialogue",
+ "bevy_map",
  "bevy_map_editor",
- "bevy_map_runtime",
  "serde",
  "serde_json",
  "uuid",

@@ -159,13 +159,15 @@ fn impl_map_entity(input: &DeriveInput) -> syn::Result<TokenStream2> {
         }
     };
 
+    // Use bevy_map paths if available, otherwise fall back to direct crate paths
+    // This allows both `bevy_map` umbrella crate users and direct crate users to work
     let expanded = quote! {
-        impl bevy_map_runtime::MapEntityType for #name {
+        impl bevy_map::runtime::MapEntityType for #name {
             fn type_name() -> &'static str {
                 #type_name
             }
 
-            fn from_instance(instance: &bevy_map_core::EntityInstance) -> Self {
+            fn from_instance(instance: &bevy_map::core::EntityInstance) -> Self {
                 Self {
                     #(#field_inits),*
                 }

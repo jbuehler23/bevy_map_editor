@@ -10,14 +10,13 @@ path = "lib.rs"
 
 [dependencies]
 bevy = { workspace = true }
-bevy_map_core = { workspace = true }
-bevy_map_autotile = { workspace = true }
-bevy_map_derive = { workspace = true }
-bevy_map_runtime = { workspace = true, features = ["physics"] }
-bevy_map_animation = { workspace = true }
-bevy_map_dialogue = { workspace = true }
+# Single import for all bevy_map runtime functionality
+bevy_map = { workspace = true, features = ["physics"] }
+# Editor (for custom_editor example only)
 bevy_map_editor = { workspace = true, features = ["runtime"] }
+# For physics examples
 avian2d = { workspace = true }
+# Serialization (for manual loading examples)
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

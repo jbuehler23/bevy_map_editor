@@ -65,16 +65,17 @@ You can then show these in the tilemap with the "Show Collisions" view
 
 ## Crates
 
-| Crate                                           | Description                                         |
-|-------------------------------------------------|-----------------------------------------------------|
-| [bevy_map_core](crates/bevy_map_core)           | Core data types (Level, Layer, Tileset, MapProject) |
-| [bevy_map_editor](crates/bevy_map_editor)       | Visual map editor with egui UI                      |
-| [bevy_map_runtime](crates/bevy_map_runtime)     | Runtime rendering via bevy_ecs_tilemap              |
-| [bevy_map_autotile](crates/bevy_map_autotile)   | Wang tile autotiling system - WIP                   |
-| [bevy_map_animation](crates/bevy_map_animation) | Sprite sheet animations                             |
-| [bevy_map_dialogue](crates/bevy_map_dialogue)   | Dialogue tree system                                |
-| [bevy_map_derive](crates/bevy_map_derive)       | `#[derive(MapEntity)]` proc macro                   |
-| [bevy_map_schema](crates/bevy_map_schema)       | Entity property validation                          |
+| Crate                                           | Description                                           |
+|-------------------------------------------------|-------------------------------------------------------|
+| [bevy_map](crates/bevy_map)                     | **Main crate** - re-exports all runtime functionality |
+| [bevy_map_editor](crates/bevy_map_editor)       | Visual map editor with egui UI                        |
+| [bevy_map_core](crates/bevy_map_core)           | Core data types (Level, Layer, Tileset, MapProject)   |
+| [bevy_map_runtime](crates/bevy_map_runtime)     | Runtime rendering via bevy_ecs_tilemap                |
+| [bevy_map_autotile](crates/bevy_map_autotile)   | Wang tile autotiling system - WIP                     |
+| [bevy_map_animation](crates/bevy_map_animation) | Sprite sheet animations                               |
+| [bevy_map_dialogue](crates/bevy_map_dialogue)   | Dialogue tree system                                  |
+| [bevy_map_derive](crates/bevy_map_derive)       | `#[derive(MapEntity)]` proc macro                     |
+| [bevy_map_schema](crates/bevy_map_schema)       | Entity property validation                            |
 
 ## Quick Start
 
@@ -110,9 +111,20 @@ cargo run --example basic_editor -p bevy_map_editor_examples
 
 ### Loading Maps at Runtime
 
+Add `bevy_map` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+bevy = "0.17"
+bevy_map = "0.1"
+
+# With physics (Avian2D collisions)
+# bevy_map = { version = "0.1", features = ["physics"] }
+```
+
 ```rust
 use bevy::prelude::*;
-use bevy_map_runtime::prelude::*;
+use bevy_map::prelude::*;
 
 fn main() {
     App::new()
@@ -126,9 +138,7 @@ fn load_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
     // Load and spawn the map
-    commands.spawn(MapHandle::new(
-        asset_server.load("maps/level1.map.json"),
-    ));
+    commands.spawn(MapHandle(asset_server.load("maps/level1.map.json")));
 }
 ```
 
@@ -141,8 +151,7 @@ Define game entities in code, place them in the editor:
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_derive::MapEntity;
-use bevy_map_runtime::{MapRuntimePlugin, MapEntityExt};
+use bevy_map::prelude::*;
 
 #[derive(Component, MapEntity)]
 #[map_entity(type_name = "NPC")]

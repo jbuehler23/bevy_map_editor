@@ -17,10 +17,9 @@
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_map_derive::MapEntity;
-use bevy_map_runtime::{
-    MapCollider, MapCollisionPlugin, MapEntityExt, MapHandle, MapRuntimePlugin,
-};
+use bevy_map::core::CollisionShape;
+use bevy_map::prelude::*;
+use bevy_map::runtime::{MapCollider, MapCollisionPlugin};
 
 fn main() {
     App::new()
@@ -186,7 +185,7 @@ fn draw_collision_debug(
 
         // Draw based on collider shape
         match &map_collider.data.shape {
-            bevy_map_core::CollisionShape::Full => {
+            CollisionShape::Full => {
                 // Full tile - draw as rectangle
                 if let Some(rect) = collider.shape().as_cuboid() {
                     let half = rect.half_extents;
@@ -197,7 +196,7 @@ fn draw_collision_debug(
                     );
                 }
             }
-            bevy_map_core::CollisionShape::Rectangle { .. } => {
+            CollisionShape::Rectangle { .. } => {
                 if let Some(rect) = collider.shape().as_cuboid() {
                     let half = rect.half_extents;
                     gizmos.rect_2d(
@@ -207,12 +206,12 @@ fn draw_collision_debug(
                     );
                 }
             }
-            bevy_map_core::CollisionShape::Circle { .. } => {
+            CollisionShape::Circle { .. } => {
                 if let Some(circle) = collider.shape().as_ball() {
                     gizmos.circle_2d(Isometry2d::from_translation(pos), circle.radius, color);
                 }
             }
-            bevy_map_core::CollisionShape::Polygon { .. } => {
+            CollisionShape::Polygon { .. } => {
                 // For polygons, just draw a marker
                 gizmos.circle_2d(
                     Isometry2d::from_translation(pos),
@@ -220,7 +219,7 @@ fn draw_collision_debug(
                     Color::srgba(0.3, 1.0, 0.3, 0.5),
                 );
             }
-            bevy_map_core::CollisionShape::None => {}
+            CollisionShape::None => {}
         }
     }
 }

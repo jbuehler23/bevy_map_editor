@@ -45,7 +45,7 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 ### Creating Dialogues (Code)
 
 ```rust
-use bevy_map_dialogue::{DialogueTree, DialogueNode, DialogueChoice};
+use bevy_map::dialogue::{DialogueTree, DialogueNode, DialogueChoice};
 
 let mut tree = DialogueTree::new("merchant_greeting");
 
@@ -71,7 +71,7 @@ The Dialogue Editor panel provides:
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_dialogue::{StartDialogueEvent, DialogueTree};
+use bevy_map::prelude::*;
 
 fn interact(
     mut start_events: MessageWriter<StartDialogueEvent>,
@@ -90,7 +90,7 @@ fn interact(
 ### Reading Dialogue State
 
 ```rust
-use bevy_map_dialogue::{DialogueRunner, DialogueTree};
+use bevy_map::prelude::*;
 
 fn show_dialogue_ui(
     runner: Res<DialogueRunner>,
@@ -110,13 +110,11 @@ fn show_dialogue_ui(
 ### Auto-Loading from Maps
 
 ```rust
-use bevy_map_runtime::DialogueTreeHandle;
+use bevy_map::runtime::DialogueTreeHandle;
 
-commands.spawn((
-    DialogueTreeHandle::new(
-        asset_server.load("maps/game.map.json"),
-        "merchant_greeting",
-    ),
+commands.spawn(DialogueTreeHandle::new(
+    asset_server.load("maps/game.map.json"),
+    "merchant_greeting",
 ));
 ```
 
@@ -125,7 +123,7 @@ commands.spawn((
 Add `DialoguePlugin` for dialogue handling:
 
 ```rust
-use bevy_map_dialogue::DialoguePlugin;
+use bevy_map::prelude::*;
 
 app.add_plugins(DialoguePlugin);
 ```

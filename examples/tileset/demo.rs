@@ -13,8 +13,8 @@
 //! Run with: cargo run --example tileset_demo -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_core::{CollisionShape, LayerData, MapProject, OneWayDirection};
-use bevy_map_runtime::{MapHandle, MapRuntimePlugin};
+use bevy_map::core::{CollisionShape, LayerData, OneWayDirection};
+use bevy_map::prelude::*;
 
 fn main() {
     App::new()
@@ -55,7 +55,7 @@ fn setup(
     // Spawn camera
     commands.spawn((Camera2d, Transform::from_xyz(64.0, 64.0, 0.0)));
 
-    // Load and spawn map - ONE LINE! Hot-reload works automatically.
+    // Load and spawn map - Hot reloading should also work here.
     let map_handle = asset_server.load("maps/example_project.map.json");
     cursor_state.map_handle = Some(map_handle.clone());
     commands.spawn(MapHandle(map_handle));

@@ -19,7 +19,7 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 ## Usage
 
 ```rust
-use bevy_map_core::{Level, Layer, LayerData, Tileset};
+use bevy_map::core::{Level, Layer, LayerData, Tileset};
 
 // Create a level
 let mut level = Level::new("My Level", 32, 32);

@@ -22,7 +22,7 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 ## Usage
 
 ```rust
-use bevy_map_autotile::{TerrainSet, TerrainSetType, Terrain, WangFiller};
+use bevy_map::autotile::{TerrainSet, TerrainSetType, Terrain, WangFiller};
 
 // Create a terrain set
 let mut terrain_set = TerrainSet::new(

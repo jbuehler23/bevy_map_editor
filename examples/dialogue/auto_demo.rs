@@ -10,8 +10,9 @@
 //! Run with: cargo run --example dialogue_auto_demo -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_dialogue::{DialogueNodeType, DialogueRunner, DialogueTree};
-use bevy_map_runtime::{DialogueHandle, DialogueTreeHandle, MapRuntimePlugin};
+use bevy_map::dialogue::{DialogueNodeType, DialogueTree};
+use bevy_map::prelude::*;
+use bevy_map::runtime::DialogueTreeHandle;
 
 fn main() {
     App::new()
@@ -36,7 +37,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
     // =========================================================================
-    // ONE LINE: DialogueTreeHandle handles everything automatically
+    // DialogueTreeHandle handles everything automatically
     // =========================================================================
     // - Waits for MapProject to load
     // - Finds dialogue tree by name

@@ -17,7 +17,7 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_runtime::prelude::*;
+use bevy_map::prelude::*;
 
 fn main() {
     App::new()
@@ -29,7 +29,7 @@ fn main() {
 
 fn load_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    commands.spawn(MapHandle::new(asset_server.load("maps/level.map.json")));
+    commands.spawn(MapHandle(asset_server.load("maps/level.map.json")));
 }
 ```
 
@@ -39,8 +39,7 @@ Register entity types to spawn game objects from map data:
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_derive::MapEntity;
-use bevy_map_runtime::{MapRuntimePlugin, MapEntityExt};
+use bevy_map::prelude::*;
 
 #[derive(Component, MapEntity)]
 #[map_entity(type_name = "Chest")]
@@ -63,13 +62,16 @@ App::new()
 Use `AnimatedSpriteHandle` to autoload sprite animations from a map project:
 
 ```rust
-use bevy_map_runtime::AnimatedSpriteHandle;
+use bevy::prelude::*;
+use bevy_map::prelude::*;
+use bevy_map::runtime::AnimatedSpriteHandle;
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         AnimatedSpriteHandle::new(
             asset_server.load("maps/game.map.json"),
-            "player_idle",  // animation name defined in editor
+            "player_sprite",
+            "idle",  // animation name defined in editor
         ),
         Transform::default(),
     ));
@@ -81,14 +83,14 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
 Use `DialogueTreeHandle` to auto-load dialogues:
 
 ```rust
-use bevy_map_runtime::DialogueTreeHandle;
+use bevy::prelude::*;
+use bevy_map::prelude::*;
+use bevy_map::runtime::DialogueTreeHandle;
 
 fn spawn_npc(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn((
-        DialogueTreeHandle::new(
-            asset_server.load("maps/game.map.json"),
-            "merchant_greeting",  // dialogue name defined in editor
-        ),
+    commands.spawn(DialogueTreeHandle::new(
+        asset_server.load("maps/game.map.json"),
+        "merchant_greeting",  // dialogue name defined in editor
     ));
 }
 ```
@@ -114,12 +116,13 @@ pub struct Player {
 Enable the `physics` feature to automatically spawn colliders from tile collision data:
 
 ```toml
-bevy_map_runtime = { version = "0.1", features = ["physics"] }
+bevy_map = { version = "0.1", features = ["physics"] }
 ```
 
 ```rust
 use bevy::prelude::*;
-use bevy_map_runtime::{MapRuntimePlugin, MapCollisionPlugin, MapHandle};
+use bevy_map::prelude::*;
+use bevy_map::runtime::MapCollisionPlugin;
 use avian2d::prelude::*;
 
 fn main() {
@@ -135,7 +138,7 @@ fn main() {
 fn load_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
     // Collisions are spawned automatically from tile properties!
-    commands.spawn(MapHandle::new(asset_server.load("maps/level.map.json")));
+    commands.spawn(MapHandle(asset_server.load("maps/level.map.json")));
 }
 ```
 
@@ -143,16 +146,12 @@ The `MapCollisionPlugin` reads collision shapes defined in the tileset editor an
 
 ## Re-exported Types
 
-This crate re-exports commonly used types:
+For convenience, use `bevy_map::prelude::*` which includes all commonly used types:
 
 ```rust
-use bevy_map_runtime::{
-    // Animation
-    SpriteData, AnimationDef, AnimatedSprite, LoopMode,
-    // Dialogue
-    DialogueTree, DialogueNode, DialogueRunner,
-    StartDialogueEvent, DialogueChoiceEvent, DialogueEndEvent,
-};
+use bevy_map::prelude::*;
+// Includes: MapRuntimePlugin, MapHandle, MapEntity, AnimatedSprite,
+// DialogueRunner, DialogueTree, and more
 ```
 
 ## License

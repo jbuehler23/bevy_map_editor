@@ -28,9 +28,9 @@ fn main() {
     App::new()
         .add_plugins(
             DefaultPlugins
-                // ═══════════════════════════════════════════════════════════════
+                // -------------------------------------------------------------------------------
                 // CUSTOMIZATION 1: Window Configuration
-                // ═══════════════════════════════════════════════════════════════
+                // -------------------------------------------------------------------------------
                 // Configure window title, size, and scaling behavior.
                 // Use scale_factor_override(1.0) for high DPI displays to prevent
                 // OS-level scaling that can cause blurriness.
@@ -44,9 +44,9 @@ fn main() {
                     }),
                     ..default()
                 })
-                // ═══════════════════════════════════════════════════════════════
-                // CUSTOMIZATION 2: Pixel-Perfect Rendering
-                // ═══════════════════════════════════════════════════════════════
+                // -------------------------------------------------------------------------------
+                // CUSTOMIZATION 2: Pixel Rendering
+                // -------------------------------------------------------------------------------
                 // For pixel art games, use Nearest (point) filtering to keep
                 // sprites crisp when zooming. This prevents blurry sprites.
                 // Similar to Godot's "Nearest" texture filter setting.
@@ -58,18 +58,18 @@ fn main() {
                         ..default()
                     },
                 })
-                // ═══════════════════════════════════════════════════════════════
+                // -------------------------------------------------------------------------------
                 // CUSTOMIZATION 3: Custom Assets Path
-                // ═══════════════════════════════════════════════════════════════
+                // -------------------------------------------------------------------------------
                 // Point to your game's assets directory
                 .set(AssetPlugin {
                     file_path: assets_path.to_string_lossy().to_string(),
                     ..default()
                 }),
         )
-        // ═══════════════════════════════════════════════════════════════════════
+        // -------------------------------------------------------------------------------════════
         // CUSTOMIZATION 4: Editor Plugin Configuration
-        // ═══════════════════════════════════════════════════════════════════════
+        // -------------------------------------------------------------------------------════════
         // Configure the editor's initial state using builder methods.
         // All of these have sensible defaults, so only override what you need.
         .add_plugins(
@@ -84,9 +84,9 @@ fn main() {
                 // Initial tool selection
                 .with_initial_tool(EditorTool::Select), // Starting tool (default: Select)
         )
-        // ═══════════════════════════════════════════════════════════════════════
+        // -------------------------------------------------------------------------------════════
         // CUSTOMIZATION 5: Runtime State Modifications
-        // ═══════════════════════════════════════════════════════════════════════
+        // -------------------------------------------------------------------------------════════
         // For advanced customization, you can modify EditorState directly at
         // startup or during runtime via systems.
         .add_systems(Startup, customize_editor_on_startup)

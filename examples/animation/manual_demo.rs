@@ -15,9 +15,7 @@
 //! Run with: cargo run --example animation_manual_demo -p bevy_map_editor_examples
 
 use bevy::prelude::*;
-use bevy_map_animation::{AnimatedSprite, SpriteAnimationPlugin, SpriteData};
-use bevy_map_core::MapProject;
-use bevy_map_runtime::MapRuntimePlugin;
+use bevy_map::prelude::*;
 
 fn main() {
     App::new()

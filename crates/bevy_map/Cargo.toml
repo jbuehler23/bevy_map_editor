@@ -1,0 +1,33 @@
+[package]
+name = "bevy_map"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Complete 2D tilemap editor and runtime for Bevy games"
+
+[dependencies]
+# Always included - core data types
+bevy_map_core = { workspace = true, features = ["bevy"] }
+bevy_map_autotile = { workspace = true }
+bevy_map_animation = { workspace = true }
+bevy_map_dialogue = { workspace = true }
+bevy_map_derive = { workspace = true }
+bevy_map_schema = { workspace = true }
+
+# Optional runtime (enabled by default)
+bevy_map_runtime = { workspace = true, optional = true }
+
+bevy = { workspace = true }
+
+[features]
+default = ["runtime", "hot-reload"]
+runtime = ["dep:bevy_map_runtime"]
+physics = ["runtime", "bevy_map_runtime/physics"]
+hot-reload = ["runtime", "bevy_map_runtime/hot-reload"]
+
+[lints]
+workspace = true
