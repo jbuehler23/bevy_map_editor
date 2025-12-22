@@ -8,6 +8,7 @@ complex asset loading, you can specify when to load those as well for more contr
 ## Headline
 
 - **Visual Map Editor** - egui-based editor with layer system, terrain painting, and entity placement
+- **Project Management** - Recent projects, preferences persistence, auto-open last project
 - **Autotiling** - Corner, Edge, and Mixed terrain modes using Wang tiles, currently WIP
 - **Runtime Loading** - Efficient tilemap rendering via bevy_ecs_tilemap 0.17
 - **Custom Entities** - Define game objects with `#[derive(MapEntity)]` proc macro

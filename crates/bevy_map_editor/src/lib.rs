@@ -24,6 +24,7 @@
 //! ```
 
 pub mod commands;
+pub mod preferences;
 pub mod project;
 pub mod render;
 pub mod tools;
@@ -394,7 +395,12 @@ impl Plugin for EditorPlugin {
         // Log the assets path for debugging
         bevy::log::info!("EditorPlugin: Using assets path: {:?}", assets_path);
 
-        // Create EditorState with custom initial configuration
+        // Load user preferences
+        let preferences = preferences::EditorPreferences::load();
+        bevy::log::info!("Loaded editor preferences");
+
+        // Create EditorState with preferences and initial configuration
+        // Plugin config takes precedence over saved preferences
         let mut editor_state = EditorState::default();
         editor_state.show_grid = self.initial_state.show_grid;
         editor_state.show_collisions = self.initial_state.show_collisions;
@@ -407,12 +413,61 @@ impl Plugin for EditorPlugin {
             .add_plugins(MapRenderPlugin)
             .add_plugins(EditorToolsPlugin)
             .insert_resource(editor_state)
+            .insert_resource(preferences)
             .init_resource::<CommandHistory>()
             .init_resource::<TileClipboard>()
             .insert_resource(Project::default())
             .insert_resource(AssetsBasePath::new(assets_path))
             .add_systems(Startup, setup_editor_camera)
-            .add_systems(Update, handle_keyboard_shortcuts);
+            .add_systems(Update, handle_keyboard_shortcuts)
+            .add_systems(Update, handle_recent_projects);
+    }
+}
+
+/// System to handle recent projects updates
+fn handle_recent_projects(
+    mut editor_state: ResMut<EditorState>,
+    mut preferences: ResMut<preferences::EditorPreferences>,
+    mut project: ResMut<Project>,
+) {
+    // Add project to recent list
+    if let Some(path) = editor_state.pending_add_recent_project.take() {
+        let name = project.name().to_string();
+        preferences.add_recent_project(path, name);
+        if let Err(e) = preferences.save() {
+            bevy::log::error!("Failed to save preferences: {}", e);
+        }
+    }
+
+    // Open recent project
+    if let Some(path) = editor_state.pending_open_recent_project.take() {
+        match Project::load(&path) {
+            Ok(loaded) => {
+                *project = loaded;
+                let name = project.name().to_string();
+                preferences.add_recent_project(path, name);
+                if let Err(e) = preferences.save() {
+                    bevy::log::error!("Failed to save preferences: {}", e);
+                }
+            }
+            Err(e) => {
+                editor_state.error_message = Some(format!("Failed to load project: {}", e));
+                // Remove from recent if file not found
+                preferences.remove_recent_project(&path.to_string_lossy());
+                if let Err(e) = preferences.save() {
+                    bevy::log::error!("Failed to save preferences: {}", e);
+                }
+            }
+        }
+    }
+
+    // Clear recent projects
+    if editor_state.pending_clear_recent_projects {
+        editor_state.pending_clear_recent_projects = false;
+        preferences.clear_recent_projects();
+        if let Err(e) = preferences.save() {
+            bevy::log::error!("Failed to save preferences: {}", e);
+        }
     }
 }
 
@@ -455,6 +510,15 @@ pub struct EditorState {
     // New project dialog state
     pub new_project_name: String,
     pub new_project_schema_path: Option<PathBuf>,
+    pub new_project_save_path: Option<PathBuf>,
+
+    // Settings dialog
+    pub show_settings_dialog: bool,
+
+    // Recent projects handling
+    pub pending_add_recent_project: Option<PathBuf>,
+    pub pending_open_recent_project: Option<PathBuf>,
+    pub pending_clear_recent_projects: bool,
 
     // New level dialog state
     pub new_level_name: String,
@@ -584,6 +648,13 @@ impl Default for EditorState {
 
             new_project_name: String::new(),
             new_project_schema_path: None,
+            new_project_save_path: None,
+
+            show_settings_dialog: false,
+
+            pending_add_recent_project: None,
+            pending_open_recent_project: None,
+            pending_clear_recent_projects: false,
 
             new_level_name: "New Level".to_string(),
             new_level_width: 50,

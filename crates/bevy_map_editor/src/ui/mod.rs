@@ -8,7 +8,9 @@ mod dialogue_editor;
 mod entity_palette;
 mod inspector;
 mod menu_bar;
+mod new_project_dialog;
 mod schema_editor;
+mod settings_dialog;
 mod spritesheet_editor;
 mod terrain;
 mod terrain_palette;
@@ -376,6 +378,7 @@ fn render_ui(
     mut ui_state: ResMut<UiState>,
     mut editor_state: ResMut<EditorState>,
     mut project: ResMut<Project>,
+    mut preferences: ResMut<crate::preferences::EditorPreferences>,
     tileset_cache: Res<TilesetTextureCache>,
     assets_base_path: Res<crate::AssetsBasePath>,
     history: Res<CommandHistory>,
@@ -394,6 +397,17 @@ fn render_ui(
         &mut project,
         Some(&history),
         Some(&clipboard),
+        &preferences,
+    );
+
+    // New Project dialog
+    new_project_dialog::render_new_project_dialog(ctx, &mut editor_state, &mut project);
+
+    // Settings dialog
+    settings_dialog::render_settings_dialog(
+        ctx,
+        &mut editor_state.show_settings_dialog,
+        &mut preferences,
     );
 
     // Toolbar

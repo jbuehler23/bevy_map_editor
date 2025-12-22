@@ -52,6 +52,8 @@ pub fn render_dialogs(
                         match Project::load(&path) {
                             Ok(loaded) => {
                                 *project = loaded;
+                                // Add to recent projects
+                                editor_state.pending_add_recent_project = Some(path);
                             }
                             Err(e) => {
                                 editor_state.error_message =
@@ -78,8 +80,15 @@ pub fn render_dialogs(
                         .add_filter("Map Project", &["map.json", "json"])
                         .save_file()
                     {
-                        if let Err(e) = project.save(&path) {
-                            editor_state.error_message = Some(format!("Failed to save: {}", e));
+                        match project.save(&path) {
+                            Ok(()) => {
+                                // Add to recent projects
+                                editor_state.pending_add_recent_project = Some(path);
+                            }
+                            Err(e) => {
+                                editor_state.error_message =
+                                    Some(format!("Failed to save: {}", e));
+                            }
                         }
                     }
                 }

@@ -1,9 +1,11 @@
 //! Menu bar UI
 
 use bevy_egui::egui;
+use std::path::PathBuf;
 
 use super::UiState;
 use crate::commands::{CommandHistory, TileClipboard};
+use crate::preferences::EditorPreferences;
 use crate::project::Project;
 use crate::EditorState;
 
@@ -17,6 +19,7 @@ pub fn render_menu_bar(
     project: &mut Project,
     history: Option<&CommandHistory>,
     clipboard: Option<&TileClipboard>,
+    preferences: &EditorPreferences,
 ) {
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
         egui::MenuBar::new().ui(ui, |ui| {
@@ -30,12 +33,39 @@ pub fn render_menu_bar(
                     editor_state.pending_action = Some(PendingAction::Open);
                     ui.close();
                 }
+
+                // Open Recent submenu
+                ui.menu_button("Open Recent", |ui| {
+                    if preferences.recent_projects.is_empty() {
+                        ui.label("(No recent projects)");
+                    } else {
+                        for recent in &preferences.recent_projects {
+                            if ui.button(&recent.name).clicked() {
+                                editor_state.pending_open_recent_project =
+                                    Some(PathBuf::from(&recent.path));
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear Recent Projects").clicked() {
+                            editor_state.pending_clear_recent_projects = true;
+                            ui.close();
+                        }
+                    }
+                });
+
+                ui.separator();
                 if ui.button("Save").clicked() {
                     editor_state.pending_action = Some(PendingAction::Save);
                     ui.close();
                 }
                 if ui.button("Save As...").clicked() {
                     editor_state.pending_action = Some(PendingAction::SaveAs);
+                    ui.close();
+                }
+                ui.separator();
+                if ui.button("Settings...").clicked() {
+                    editor_state.show_settings_dialog = true;
                     ui.close();
                 }
                 ui.separator();

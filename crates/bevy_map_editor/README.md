@@ -9,7 +9,9 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 
 ## Features
 
-- Project management (new, open, save)
+- Project management (new, open, save, recent projects)
+- Preferences with auto-save (persisted to user config directory)
+- Auto-open last project on startup
 - Multi-level support with hierarchical view
 - Layer system (tile and object layers)
 - Tileset management with multi-image support
@@ -71,13 +73,14 @@ bevy_map_editor = { version = "0.1", features = ["runtime"] }
 
 | Panel           | Purpose                                                    |
 |-----------------|------------------------------------------------------------|
-| Menu Bar        | File, Edit, View, Project menus                            |
+| Menu Bar        | File, Edit, View, Project, Tools, Help menus               |
 | Toolbar         | Tool selection (Select, Paint, Erase, Fill, Entity)        |
 | Project Tree    | Hierarchical view of levels, layers, dialogues, animations |
 | Inspector       | Property editing for selected items                        |
 | Terrain Palette | Terrain set and terrain selection for autotiling           |
 | Tileset Panel   | Tile selection from loaded tilesets                        |
 | Viewport        | Map preview and editing canvas                             |
+| Settings Dialog | Preferences for startup, view defaults, and tools          |
 
 ## Keyboard Shortcuts
 

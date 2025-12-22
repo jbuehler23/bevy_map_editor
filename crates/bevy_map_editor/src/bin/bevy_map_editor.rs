@@ -7,7 +7,10 @@ use bevy::asset::{AssetPlugin, UnapprovedPathMode};
 use bevy::image::{ImageFilterMode, ImageSamplerDescriptor};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
+use bevy_map_editor::preferences::EditorPreferences;
+use bevy_map_editor::project::Project;
 use bevy_map_editor::EditorPlugin;
+use std::path::PathBuf;
 
 fn main() {
     App::new()
@@ -40,5 +43,36 @@ fn main() {
                 }),
         )
         .add_plugins(EditorPlugin::default())
+        .add_systems(Startup, auto_open_last_project)
         .run();
+}
+
+/// System to auto-open the last project on startup if enabled in preferences
+fn auto_open_last_project(
+    mut project: ResMut<Project>,
+    preferences: Res<EditorPreferences>,
+) {
+    if !preferences.auto_open_last_project {
+        return;
+    }
+
+    if let Some(recent) = preferences.last_project() {
+        let path = PathBuf::from(&recent.path);
+        if path.exists() {
+            match Project::load(&path) {
+                Ok(loaded) => {
+                    *project = loaded;
+                    info!("Auto-opened last project: {}", recent.name);
+                }
+                Err(e) => {
+                    warn!("Failed to auto-open project '{}': {}", recent.name, e);
+                }
+            }
+        } else {
+            warn!(
+                "Last project file not found: {} ({})",
+                recent.name, recent.path
+            );
+        }
+    }
 }

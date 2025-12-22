@@ -2,9 +2,10 @@
 
 use crate::EditorState;
 use bevy_egui::egui;
+use serde::{Deserialize, Serialize};
 
 /// Available editor tools
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum EditorTool {
     #[default]
     Select,
@@ -26,7 +27,7 @@ impl EditorTool {
 }
 
 /// Tool mode for painting operations
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ToolMode {
     /// Single tile/point painting (click or drag)
     #[default]
