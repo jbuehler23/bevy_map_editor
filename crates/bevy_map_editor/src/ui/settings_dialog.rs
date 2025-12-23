@@ -6,7 +6,11 @@ use crate::preferences::EditorPreferences;
 use crate::ui::{EditorTool, ToolMode};
 
 /// Render the Settings dialog
-pub fn render_settings_dialog(ctx: &egui::Context, show: &mut bool, preferences: &mut EditorPreferences) {
+pub fn render_settings_dialog(
+    ctx: &egui::Context,
+    show: &mut bool,
+    preferences: &mut EditorPreferences,
+) {
     if !*show {
         return;
     }
@@ -114,12 +118,16 @@ pub fn render_settings_dialog(ctx: &egui::Context, show: &mut bool, preferences:
 
                 ui.horizontal(|ui| {
                     ui.label("Tree View Width:");
-                    ui.add(egui::DragValue::new(&mut preferences.tree_view_width).range(100.0..=500.0));
+                    ui.add(
+                        egui::DragValue::new(&mut preferences.tree_view_width).range(100.0..=500.0),
+                    );
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Inspector Width:");
-                    ui.add(egui::DragValue::new(&mut preferences.inspector_width).range(150.0..=600.0));
+                    ui.add(
+                        egui::DragValue::new(&mut preferences.inspector_width).range(150.0..=600.0),
+                    );
                 });
 
                 ui.add_space(16.0);

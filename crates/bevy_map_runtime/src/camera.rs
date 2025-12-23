@@ -130,7 +130,11 @@ pub fn setup_camera_bounds_from_map(
         for camera_entity in camera_query.iter() {
             commands
                 .entity(camera_entity)
-                .insert(CameraBounds::from_level(level.width, level.height, tile_size));
+                .insert(CameraBounds::from_level(
+                    level.width,
+                    level.height,
+                    tile_size,
+                ));
 
             info!(
                 "Set camera bounds to {}x{} pixels ({}x{} tiles)",

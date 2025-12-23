@@ -86,8 +86,7 @@ pub fn render_dialogs(
                                 editor_state.pending_add_recent_project = Some(path);
                             }
                             Err(e) => {
-                                editor_state.error_message =
-                                    Some(format!("Failed to save: {}", e));
+                                editor_state.error_message = Some(format!("Failed to save: {}", e));
                             }
                         }
                     }

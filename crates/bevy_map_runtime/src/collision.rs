@@ -170,7 +170,10 @@ fn spawn_collider_for_tile(
     };
 
     // Use bevy_ecs_tilemap's coordinate conversion for consistency with tile rendering
-    let tile_pos = TilePos { x: tile_x, y: tile_y };
+    let tile_pos = TilePos {
+        x: tile_x,
+        y: tile_y,
+    };
     let center = tile_pos.center_in_world(map_size, grid_size, tilemap_tile_size, map_type, anchor);
 
     // Apply offset from collision shape

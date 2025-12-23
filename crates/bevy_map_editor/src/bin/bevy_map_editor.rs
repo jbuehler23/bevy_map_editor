@@ -48,10 +48,7 @@ fn main() {
 }
 
 /// System to auto-open the last project on startup if enabled in preferences
-fn auto_open_last_project(
-    mut project: ResMut<Project>,
-    preferences: Res<EditorPreferences>,
-) {
+fn auto_open_last_project(mut project: ResMut<Project>, preferences: Res<EditorPreferences>) {
     if !preferences.auto_open_last_project {
         return;
     }

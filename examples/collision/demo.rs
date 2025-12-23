@@ -158,10 +158,7 @@ fn camera_follow(
 /// Switches between "idle" and "run" animations based on velocity,
 /// and flips the sprite based on movement direction.
 fn update_player_animation(
-    mut query: Query<
-        (&LinearVelocity, Option<&mut AnimatedSprite>, &mut Sprite),
-        With<Player>,
-    >,
+    mut query: Query<(&LinearVelocity, Option<&mut AnimatedSprite>, &mut Sprite), With<Player>>,
 ) {
     for (velocity, animated, mut sprite) in query.iter_mut() {
         // Flip sprite based on movement direction

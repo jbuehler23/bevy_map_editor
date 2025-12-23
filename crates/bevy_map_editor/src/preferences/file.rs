@@ -58,8 +58,8 @@ impl EditorPreferences {
             return Ok(Self::default());
         }
 
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| PreferencesError::IoError(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(&path).map_err(|e| PreferencesError::IoError(e.to_string()))?;
 
         serde_json::from_str(&content).map_err(|e| PreferencesError::ParseError(e.to_string()))
     }
