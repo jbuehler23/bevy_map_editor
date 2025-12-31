@@ -490,17 +490,12 @@ pub fn render_world_view(
                             let mut new_y = orig_y + world_delta_y;
 
                             // Apply snapping based on layout mode
-                            match project.world_config.layout {
-                                WorldLayout::GridVania => {
-                                    let grid_w = project.world_config.grid_width as i32;
-                                    let grid_h = project.world_config.grid_height as i32;
-                                    // Round to nearest grid cell (not truncate)
-                                    new_x =
-                                        ((new_x as f32 / grid_w as f32).round() as i32) * grid_w;
-                                    new_y =
-                                        ((new_y as f32 / grid_h as f32).round() as i32) * grid_h;
-                                }
-                                _ => {}
+                            if project.world_config.layout == WorldLayout::GridVania {
+                                let grid_w = project.world_config.grid_width as i32;
+                                let grid_h = project.world_config.grid_height as i32;
+                                // Round to nearest grid cell (not truncate)
+                                new_x = ((new_x as f32 / grid_w as f32).round() as i32) * grid_w;
+                                new_y = ((new_y as f32 / grid_h as f32).round() as i32) * grid_h;
                             }
 
                             level.world_x = new_x;
@@ -844,7 +839,7 @@ fn detect_clicked_edge(
 
     // Edge detection margin (in pixels)
     let margin = rect.width().min(rect.height()) * 0.25; // 25% of smaller dimension
-    let margin = margin.max(15.0).min(40.0); // Clamp to reasonable range
+    let margin = margin.clamp(15.0, 40.0); // Clamp to reasonable range
 
     // Check each edge (prioritize by distance from edge)
     let dist_top = click_pos.y - rect.min.y;
