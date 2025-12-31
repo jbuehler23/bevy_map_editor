@@ -85,6 +85,8 @@ impl Default for AssetBrowserState {
 pub struct FileEntry {
     pub path: PathBuf,
     pub name: String,
+    /// Pre-computed lowercase name for efficient sorting/searching
+    pub name_lower: String,
     pub is_dir: bool,
     pub extension: Option<String>,
     pub size: u64,
@@ -93,6 +95,7 @@ pub struct FileEntry {
 impl FileEntry {
     fn from_path(path: PathBuf) -> Option<Self> {
         let name = path.file_name()?.to_string_lossy().to_string();
+        let name_lower = name.to_lowercase();
         let is_dir = path.is_dir();
         let extension = if is_dir {
             None
@@ -104,6 +107,7 @@ impl FileEntry {
         Some(Self {
             path,
             name,
+            name_lower,
             is_dir,
             extension,
             size,
@@ -224,6 +228,21 @@ impl AssetBrowserState {
 
     /// Apply filters and sorting to entries
     fn filter_and_sort(&self, mut entries: Vec<FileEntry>) -> Vec<FileEntry> {
+        // Pre-compute search text lowercase once (not per entry)
+        let search_lower = self.filter.search_text.to_lowercase();
+
+        // Pre-parse custom extensions once
+        let custom_exts: Vec<&str> = if !self.filter.custom_extensions.is_empty() {
+            self.filter
+                .custom_extensions
+                .split(',')
+                .map(|s| s.trim().trim_start_matches('.'))
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         // Filter
         entries.retain(|entry| {
             // Always show directories if filter enabled
@@ -237,15 +256,7 @@ impl AssetBrowserState {
                 || (self.filter.show_json && entry.is_json());
 
             // Check custom extensions
-            let custom_match = if !self.filter.custom_extensions.is_empty() {
-                let custom_exts: Vec<&str> = self
-                    .filter
-                    .custom_extensions
-                    .split(',')
-                    .map(|s| s.trim().trim_start_matches('.'))
-                    .filter(|s| !s.is_empty())
-                    .collect();
-
+            let custom_match = if !custom_exts.is_empty() {
                 entry.extension.as_ref().map_or(false, |ext| {
                     custom_exts.iter().any(|ce| ce.eq_ignore_ascii_case(ext))
                 })
@@ -253,16 +264,12 @@ impl AssetBrowserState {
                 false
             };
 
-            // Check search text
-            let search_match = self.filter.search_text.is_empty()
-                || entry
-                    .name
-                    .to_lowercase()
-                    .contains(&self.filter.search_text.to_lowercase());
+            // Check search text (use cached lowercase name)
+            let search_match = search_lower.is_empty() || entry.name_lower.contains(&search_lower);
 
             (type_match
                 || custom_match
-                || self.filter.custom_extensions.is_empty()
+                || custom_exts.is_empty()
                     && !self.filter.show_images
                     && !self.filter.show_audio
                     && !self.filter.show_json)
@@ -276,9 +283,9 @@ impl AssetBrowserState {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => {
-                    // Same type, apply sort order
+                    // Same type, apply sort order (use cached lowercase)
                     match self.sort_order {
-                        SortOrder::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                        SortOrder::Name => a.name_lower.cmp(&b.name_lower),
                         SortOrder::Size => a.size.cmp(&b.size),
                         SortOrder::Type => {
                             let ext_a = a.extension.as_deref().unwrap_or("");

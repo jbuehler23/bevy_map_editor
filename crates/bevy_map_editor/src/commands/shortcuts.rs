@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::ui::PendingAction;
-use crate::EditorState;
+use crate::{EditorState, EditorViewMode};
 
 /// Handle keyboard shortcuts
 pub fn handle_keyboard_shortcuts(
@@ -68,6 +68,22 @@ pub fn handle_keyboard_shortcuts(
             editor_state.is_pasting = false;
         } else {
             editor_state.tile_selection.clear();
+        }
+    }
+
+    // Non-Ctrl shortcuts (only when not typing in text fields)
+    if !ctrl {
+        // W key - toggle World view
+        if keyboard.just_pressed(KeyCode::KeyW) {
+            editor_state.view_mode = match editor_state.view_mode {
+                EditorViewMode::Level => EditorViewMode::World,
+                EditorViewMode::World => EditorViewMode::Level,
+            };
+        }
+
+        // L key - switch to Level view
+        if keyboard.just_pressed(KeyCode::KeyL) {
+            editor_state.view_mode = EditorViewMode::Level;
         }
     }
 }

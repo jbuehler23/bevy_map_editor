@@ -1,6 +1,6 @@
 //! Toolbar UI for tool selection
 
-use crate::EditorState;
+use crate::{EditorState, EditorViewMode};
 use bevy_egui::egui;
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +49,31 @@ impl ToolMode {
 pub fn render_toolbar(ctx: &egui::Context, editor_state: &mut EditorState) {
     egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
         ui.horizontal(|ui| {
+            // View mode toggle
+            ui.label("View:");
+            if ui
+                .selectable_label(editor_state.view_mode == EditorViewMode::Level, "Level")
+                .on_hover_text("Edit level (L)")
+                .clicked()
+            {
+                editor_state.view_mode = EditorViewMode::Level;
+            }
+            if ui
+                .selectable_label(editor_state.view_mode == EditorViewMode::World, "World")
+                .on_hover_text("World overview (W)")
+                .clicked()
+            {
+                editor_state.view_mode = EditorViewMode::World;
+            }
+
+            ui.separator();
+
+            // Tool selection - disabled in World view
+            let tools_enabled = editor_state.view_mode == EditorViewMode::Level;
+            if !tools_enabled {
+                ui.disable();
+            }
+
             // Tool selection - grouped by category
             ui.label("Tools:");
 

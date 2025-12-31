@@ -160,7 +160,8 @@ fn sync_level_rendering(
         return;
     };
 
-    let Some(level) = project.levels.iter().find(|l| l.id == level_id) else {
+    // Use O(1) lookup instead of iter().find()
+    let Some(level) = project.get_level(level_id) else {
         return;
     };
 
@@ -208,7 +209,8 @@ fn sync_layer_visibility(
         return;
     };
 
-    let Some(level) = project.levels.iter().find(|l| l.id == level_id) else {
+    // Use O(1) lookup
+    let Some(level) = project.get_level(level_id) else {
         return;
     };
 
@@ -264,8 +266,8 @@ fn spawn_level_tilemaps(
             continue;
         };
 
-        // Get tileset info
-        let Some(tileset) = project.tilesets.iter().find(|t| t.id == *tileset_id) else {
+        // Get tileset info (O(1) lookup)
+        let Some(tileset) = project.get_tileset(*tileset_id) else {
             continue;
         };
 
@@ -492,8 +494,8 @@ pub fn update_tile(
     y: u32,
     new_tile_index: Option<u32>,
 ) {
-    // Get the level and layer to find the tileset
-    let Some(level) = project.levels.iter().find(|l| l.id == level_id) else {
+    // Get the level and layer to find the tileset (O(1) lookups)
+    let Some(level) = project.get_level(level_id) else {
         return;
     };
 
@@ -505,7 +507,7 @@ pub fn update_tile(
         return;
     };
 
-    let Some(tileset) = project.tilesets.iter().find(|t| t.id == *tileset_id) else {
+    let Some(tileset) = project.get_tileset(*tileset_id) else {
         return;
     };
 
@@ -848,7 +850,8 @@ fn sync_collision_rendering(
         return;
     };
 
-    let Some(level) = project.levels.iter().find(|l| l.id == level_id) else {
+    // Use O(1) lookup instead of iter().find()
+    let Some(level) = project.get_level(level_id) else {
         return;
     };
 
@@ -864,8 +867,8 @@ fn sync_collision_rendering(
             tileset_id, tiles, ..
         } = &layer.data
         {
-            // Get the tileset
-            let Some(tileset) = project.tilesets.iter().find(|t| t.id == *tileset_id) else {
+            // Get the tileset (O(1) lookup)
+            let Some(tileset) = project.get_tileset(*tileset_id) else {
                 continue;
             };
 
@@ -1121,7 +1124,8 @@ fn get_tile_size(editor_state: &EditorState, project: &Project) -> f32 {
     let level_id = editor_state.selected_level;
     let layer_idx = editor_state.selected_layer;
 
-    let level = level_id.and_then(|id| project.levels.iter().find(|l| l.id == id));
+    // Use O(1) lookup for level
+    let level = level_id.and_then(|id| project.get_level(id));
     let layer_tileset_id = level.and_then(|l| {
         layer_idx
             .and_then(|idx| l.layers.get(idx))
@@ -1134,9 +1138,10 @@ fn get_tile_size(editor_state: &EditorState, project: &Project) -> f32 {
             })
     });
 
+    // Use O(1) lookup for tileset
     layer_tileset_id
         .or(editor_state.selected_tileset)
-        .and_then(|id| project.tilesets.iter().find(|t| t.id == id))
+        .and_then(|id| project.get_tileset(id))
         .map(|t| t.tile_size as f32)
         .unwrap_or(32.0)
 }
@@ -1440,11 +1445,11 @@ fn sync_terrain_preview(
         preview_cache.current_tiles.remove(&pos);
     }
 
-    // Get tileset info for spawning new entities
+    // Get tileset info for spawning new entities (O(1) lookup)
     let tileset_info = editor_state
         .terrain_preview
         .tileset_id
-        .and_then(|tileset_id| project.tilesets.iter().find(|t| t.id == tileset_id));
+        .and_then(|tileset_id| project.get_tileset(tileset_id));
 
     let Some(tileset) = tileset_info else {
         // No tileset, clear everything remaining
@@ -1662,8 +1667,8 @@ fn sync_brush_preview(
     // Clear old preview
     clear_preview(&mut commands, &mut preview_cache);
 
-    // Get tileset
-    let Some(tileset) = project.tilesets.iter().find(|t| t.id == tileset_id) else {
+    // Get tileset (O(1) lookup)
+    let Some(tileset) = project.get_tileset(tileset_id) else {
         return;
     };
 
@@ -1873,9 +1878,9 @@ pub struct EntityRenderState {
     pub entity_sprites: HashMap<(Uuid, Uuid), Entity>,
     /// Selection highlight entity (if any)
     pub selection_highlight: Option<Entity>,
-    /// Last rendered level for change detection
+    /// Last rendered level for change detection (despawn on level change only)
     pub last_level: Option<Uuid>,
-    /// Last rendered layer for change detection
+    /// Last rendered layer for visibility toggle (no despawn needed)
     pub last_layer: Option<usize>,
 }
 
@@ -1889,10 +1894,9 @@ fn sync_entity_rendering(
     let current_level_id = editor_state.selected_level;
     let current_layer_idx = editor_state.selected_layer;
 
-    // If level or layer changed, clear all entities
-    if entity_render_state.last_level != current_level_id
-        || entity_render_state.last_layer != current_layer_idx
-    {
+    // Only despawn all entities when LEVEL changes (not layer)
+    // Layer changes use visibility toggling for performance
+    if entity_render_state.last_level != current_level_id {
         for (_, sprite_entity) in entity_render_state.entity_sprites.drain() {
             let _ = commands.get_entity(sprite_entity).map(|mut e| e.despawn());
         }
@@ -1902,14 +1906,15 @@ fn sync_entity_rendering(
                 .map(|mut e| e.despawn());
         }
         entity_render_state.last_level = current_level_id;
-        entity_render_state.last_layer = current_layer_idx;
     }
+    entity_render_state.last_layer = current_layer_idx;
 
     let Some(level_id) = current_level_id else {
         return;
     };
 
-    let Some(level) = project.levels.iter().find(|l| l.id == level_id) else {
+    // Use O(1) lookup
+    let Some(level) = project.get_level(level_id) else {
         return;
     };
 
@@ -1922,19 +1927,15 @@ fn sync_entity_rendering(
         })
         .unwrap_or_default();
 
-    // Build set of current entity IDs (only those on the selected layer)
-    let current_entity_ids: std::collections::HashSet<_> = level
-        .entities
-        .iter()
-        .filter(|e| layer_entity_ids.contains(&e.id))
-        .map(|e| (level_id, e.id))
-        .collect();
+    // Build set of ALL entity IDs in the level (for existence check)
+    let all_entity_ids: std::collections::HashSet<_> =
+        level.entities.iter().map(|e| (level_id, e.id)).collect();
 
-    // Remove sprites for entities that no longer exist
+    // Remove sprites for entities that no longer exist in the level
     let to_remove: Vec<_> = entity_render_state
         .entity_sprites
         .keys()
-        .filter(|key| !current_entity_ids.contains(key))
+        .filter(|key| !all_entity_ids.contains(key))
         .copied()
         .collect();
 
@@ -1944,15 +1945,20 @@ fn sync_entity_rendering(
         }
     }
 
-    // Spawn or update sprites for entities on the selected Object layer
-    for entity in level
-        .entities
-        .iter()
-        .filter(|e| layer_entity_ids.contains(&e.id))
-    {
+    // Spawn or update sprites for ALL entities in the level
+    // Toggle visibility based on whether entity is in current layer
+    for entity in &level.entities {
         let key = (level_id, entity.id);
         let x = entity.position[0];
         let y = entity.position[1];
+
+        // Determine visibility: only visible if entity is in current layer
+        let is_visible = layer_entity_ids.contains(&entity.id);
+        let visibility = if is_visible {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
 
         // Get color and marker size from schema type definition
         let type_def = project.schema.get_type(&entity.type_name);
@@ -1962,7 +1968,7 @@ fn sync_entity_rendering(
         let entity_size = type_def.and_then(|td| td.marker_size).unwrap_or(16) as f32;
 
         if let Some(&sprite_entity) = entity_render_state.entity_sprites.get(&key) {
-            // Update position and color of existing sprite
+            // Update position, color, and visibility of existing sprite
             if let Ok(mut entity_commands) = commands.get_entity(sprite_entity) {
                 entity_commands.insert((
                     Transform::from_xyz(x, y, 50.0),
@@ -1971,10 +1977,11 @@ fn sync_entity_rendering(
                         custom_size: Some(Vec2::new(entity_size, entity_size)),
                         ..default()
                     },
+                    visibility,
                 ));
             }
         } else {
-            // Spawn new sprite
+            // Spawn new sprite with visibility
             let sprite_entity = commands
                 .spawn((
                     Sprite {
@@ -1983,6 +1990,7 @@ fn sync_entity_rendering(
                         ..default()
                     },
                     Transform::from_xyz(x, y, 50.0),
+                    visibility,
                     EditorEntitySprite {
                         level_id,
                         entity_id: entity.id,

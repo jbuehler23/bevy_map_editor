@@ -20,6 +20,7 @@ mod tileset;
 mod tileset_editor;
 mod toolbar;
 mod tree_view;
+mod world_view;
 
 pub use animation_editor::{render_animation_editor, AnimationEditorResult, AnimationEditorState};
 pub use asset_browser::{render_asset_browser, AssetBrowserResult, AssetBrowserState};
@@ -40,6 +41,7 @@ pub use tileset::{
 pub use tileset_editor::{render_tileset_editor, TilesetEditorState};
 pub use toolbar::{render_toolbar, EditorTool, ToolMode};
 pub use tree_view::{render_tree_view, TreeViewResult};
+pub use world_view::{render_new_level_dialog, render_world_view, NewLevelParams, WorldViewResult};
 
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass, EguiTextureHandle};
@@ -158,36 +160,66 @@ fn load_tileset_textures(
 ) {
     use bevy::asset::LoadState;
 
-    // Migrate legacy tilesets to multi-image format
-    for tileset in project.tilesets.iter_mut() {
-        tileset.migrate_to_multi_image();
+    // Early exit: if no pending loads and all images loaded/failed, skip entirely
+    if cache.pending.is_empty() {
+        // Check if we have any unprocessed images
+        let has_unprocessed = project.tilesets.iter().any(|tileset| {
+            tileset.images.iter().any(|img| {
+                !cache.loaded.contains_key(&img.id)
+                    && !matches!(
+                        cache.load_states.get(&img.id),
+                        Some(ImageLoadState::Failed(_))
+                    )
+            })
+        });
+        if !has_unprocessed {
+            return; // All textures loaded or failed, nothing to do
+        }
     }
 
-    // Collect all tileset images to process
-    let images_to_process: Vec<_> = project
+    // Migrate legacy tilesets to multi-image format (only if needed)
+    // Check if any tileset needs migration first
+    let needs_migration = project
         .tilesets
         .iter()
-        .flat_map(|tileset| {
-            let tileset_id = tileset.id;
-            let tile_size = tileset.tile_size;
-            tileset
-                .images
-                .iter()
-                .enumerate()
-                .map(move |(img_idx, image)| {
-                    (tileset_id, img_idx, image.id, image.path.clone(), tile_size)
-                })
-        })
-        .filter(|(_, _, img_id, _, _)| {
-            !cache.loaded.contains_key(img_id)
+        .any(|t| t.images.is_empty() && t.path.as_ref().map_or(false, |p| !p.is_empty()));
+    if needs_migration {
+        for tileset in project.tilesets.iter_mut() {
+            tileset.migrate_to_multi_image();
+        }
+    }
+
+    // Process images directly without collecting into Vec
+    // First gather what we need to process (without cloning paths yet)
+    let mut images_to_process: Vec<(uuid::Uuid, usize, uuid::Uuid, u32)> = Vec::new();
+    for tileset in project.tilesets.iter() {
+        let tileset_id = tileset.id;
+        let tile_size = tileset.tile_size;
+        for (img_idx, image) in tileset.images.iter().enumerate() {
+            let img_id = image.id;
+            if !cache.loaded.contains_key(&img_id)
                 && !matches!(
-                    cache.load_states.get(img_id),
+                    cache.load_states.get(&img_id),
                     Some(ImageLoadState::Failed(_))
                 )
-        })
-        .collect();
+            {
+                images_to_process.push((tileset_id, img_idx, img_id, tile_size));
+            }
+        }
+    }
 
-    for (tileset_id, img_idx, image_id, image_path, tile_size) in images_to_process {
+    for (tileset_id, img_idx, image_id, tile_size) in images_to_process {
+        // Get the image path only when needed
+        let image_path = project
+            .tilesets
+            .iter()
+            .find(|t| t.id == tileset_id)
+            .and_then(|t| t.images.get(img_idx))
+            .map(|img| img.path.clone());
+
+        let Some(image_path) = image_path else {
+            continue;
+        };
         // Check if load is pending
         if let Some((path, handle)) = cache.pending.get(&image_id).cloned() {
             // Check load state using AssetServer
@@ -1107,11 +1139,64 @@ fn render_ui(
             });
     }
 
-    // Central area - transparent to allow Bevy rendering to show through
+    // Central area - world view or level view
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE)
         .show(ctx, |ui| {
-            render_viewport_overlay(ui, &editor_state);
+            match editor_state.view_mode {
+                crate::EditorViewMode::World => {
+                    // Render world view with a dark background
+                    let rect = ui.available_rect_before_wrap();
+                    ui.painter()
+                        .rect_filled(rect, 0.0, egui::Color32::from_rgb(30, 30, 35));
+
+                    let world_result = render_world_view(ui, &mut editor_state, &mut project);
+
+                    // Handle world view results
+                    if let Some(level_id) = world_result.open_level {
+                        editor_state.selected_level = Some(level_id);
+                        editor_state.view_mode = crate::EditorViewMode::Level;
+                    }
+                    if let Some(level_id) = world_result.delete_level {
+                        project.remove_level(level_id);
+                        if editor_state.selected_level == Some(level_id) {
+                            editor_state.selected_level = project.levels.first().map(|l| l.id);
+                        }
+                    }
+                    if let Some(level_id) = world_result.duplicate_level {
+                        if let Some(new_id) = project.duplicate_level(level_id) {
+                            editor_state.selected_level = Some(new_id);
+                            // Offset the duplicated level
+                            if let Some(level) = project.get_level_mut(new_id) {
+                                level.world_x += 64;
+                                level.world_y += 64;
+                            }
+                        }
+                    }
+                    if let Some(params) = world_result.create_level {
+                        let new_level = bevy_map_core::Level::new_at(
+                            params.name,
+                            params.width,
+                            params.height,
+                            params.world_x,
+                            params.world_y,
+                        );
+                        let new_id = new_level.id;
+                        project.add_level(new_level);
+                        editor_state.selected_level = Some(new_id);
+                    }
+                    if let Some(level_id) = world_result.rename_level {
+                        if let Some(level) = project.get_level(level_id) {
+                            editor_state.rename_buffer = level.name.clone();
+                            editor_state.renaming_item = Some(crate::RenamingItem::Level(level_id));
+                        }
+                    }
+                }
+                crate::EditorViewMode::Level => {
+                    // Normal level editing - transparent to show Bevy rendering
+                    render_viewport_overlay(ui, &editor_state);
+                }
+            }
         });
 
     // Dialogs
@@ -1121,6 +1206,20 @@ fn render_ui(
     terrain::render_new_terrain_dialog(ctx, &mut editor_state, &mut project);
     terrain::render_new_terrain_set_dialog(ctx, &mut editor_state, &mut project);
     terrain::render_add_terrain_to_set_dialog(ctx, &mut editor_state, &mut project);
+
+    // New level dialog (for World View)
+    if let Some(params) = render_new_level_dialog(ctx, &mut editor_state) {
+        let new_level = bevy_map_core::Level::new_at(
+            params.name,
+            params.width,
+            params.height,
+            params.world_x,
+            params.world_y,
+        );
+        let new_id = new_level.id;
+        project.add_level(new_level);
+        editor_state.selected_level = Some(new_id);
+    }
 
     // Tileset & Terrain Editor (modal window)
     render_tileset_editor(ctx, &mut editor_state, &mut project, Some(&tileset_cache));

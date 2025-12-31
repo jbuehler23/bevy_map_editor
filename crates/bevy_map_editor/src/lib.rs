@@ -246,6 +246,16 @@ pub struct BrushPreviewState {
     pub active: bool,
 }
 
+/// Editor view mode (level editing vs world overview)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EditorViewMode {
+    /// Normal level editing view
+    #[default]
+    Level,
+    /// World overview showing all levels
+    World,
+}
+
 /// Item currently being renamed inline
 #[derive(Clone, Debug, PartialEq)]
 pub enum RenamingItem {
@@ -619,6 +629,38 @@ pub struct EditorState {
     pub tile_move_offset: Option<(i32, i32)>,
     /// Flag to cancel move operation (set by Escape key, processed by tools system)
     pub pending_cancel_move: bool,
+
+    // World view state
+    /// Current view mode (Level or World)
+    pub view_mode: EditorViewMode,
+    /// Zoom level for world view (separate from level zoom)
+    pub world_view_zoom: f32,
+    /// Pan offset for world view
+    pub world_view_offset: bevy::math::Vec2,
+    /// Level currently being dragged in world view
+    pub world_dragging_level: Option<uuid::Uuid>,
+    /// Starting mouse position of level drag (screen coordinates)
+    pub world_drag_start: Option<bevy::math::Vec2>,
+    /// Original level position when drag started (world coordinates)
+    pub world_drag_level_start_pos: Option<(i32, i32)>,
+    /// Whether to show connections in world view
+    pub show_connections: bool,
+    /// Hovered level in world view
+    pub world_hovered_level: Option<uuid::Uuid>,
+    /// Level connection being created (from level ID and direction)
+    pub world_connection_from: Option<(uuid::Uuid, bevy_map_core::ConnectionDirection)>,
+
+    // New level dialog state (world view)
+    /// Whether the world view new level dialog is open
+    pub world_new_level_dialog_open: bool,
+    /// Position where the new level will be created
+    pub world_new_level_pos: (i32, i32),
+    /// Name for the new level
+    pub world_new_level_name: String,
+    /// Width for the new level (in tiles)
+    pub world_new_level_width: u32,
+    /// Height for the new level (in tiles)
+    pub world_new_level_height: u32,
 }
 
 impl Default for EditorState {
@@ -724,6 +766,22 @@ impl Default for EditorState {
             tile_move_original: None,
             tile_move_offset: None,
             pending_cancel_move: false,
+
+            view_mode: EditorViewMode::Level,
+            world_view_zoom: 0.25,
+            world_view_offset: bevy::math::Vec2::ZERO,
+            world_dragging_level: None,
+            world_drag_start: None,
+            world_drag_level_start_pos: None,
+            show_connections: true,
+            world_hovered_level: None,
+            world_connection_from: None,
+
+            world_new_level_dialog_open: false,
+            world_new_level_pos: (0, 0),
+            world_new_level_name: String::new(),
+            world_new_level_width: 50,
+            world_new_level_height: 50,
         }
     }
 }

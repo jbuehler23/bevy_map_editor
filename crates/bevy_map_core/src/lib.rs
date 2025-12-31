@@ -15,6 +15,7 @@ mod level;
 mod project;
 mod tileset;
 mod value;
+mod world;
 
 pub use collision::{CollisionData, CollisionShape, OneWayDirection, PhysicsBody};
 pub use entity::EntityInstance;
@@ -23,3 +24,4 @@ pub use level::Level;
 pub use project::{EditorProject, MapProject, MapProjectBuilder};
 pub use tileset::{TileProperties, Tileset, TilesetImage};
 pub use value::Value;
+pub use world::{ConnectionDirection, LevelConnection, WorldConfig, WorldLayout};

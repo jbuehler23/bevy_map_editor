@@ -13,6 +13,15 @@ pub struct Level {
     pub height: u32,
     pub layers: Vec<Layer>,
     pub entities: Vec<EntityInstance>,
+    /// World X position in pixels (for world view)
+    #[serde(default)]
+    pub world_x: i32,
+    /// World Y position in pixels (for world view)
+    #[serde(default)]
+    pub world_y: i32,
+    /// Background color for world view (hex format, e.g., "#3C3C50")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bg_color: Option<String>,
 }
 
 impl Level {
@@ -25,7 +34,36 @@ impl Level {
             height,
             layers: Vec::new(),
             entities: Vec::new(),
+            world_x: 0,
+            world_y: 0,
+            bg_color: None,
         }
+    }
+
+    /// Create a new level at a specific world position
+    pub fn new_at(name: String, width: u32, height: u32, world_x: i32, world_y: i32) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            width,
+            height,
+            layers: Vec::new(),
+            entities: Vec::new(),
+            world_x,
+            world_y,
+            bg_color: None,
+        }
+    }
+
+    /// Set the world position
+    pub fn set_world_position(&mut self, x: i32, y: i32) {
+        self.world_x = x;
+        self.world_y = y;
+    }
+
+    /// Get the world position as a tuple
+    pub fn world_position(&self) -> (i32, i32) {
+        (self.world_x, self.world_y)
     }
 
     /// Add a new layer

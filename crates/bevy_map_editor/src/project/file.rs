@@ -35,6 +35,9 @@ impl Project {
 
         project.path = Some(path.to_path_buf());
 
+        // Build lookup indices for O(1) access to levels, tilesets, etc.
+        project.rebuild_indices();
+
         // Validate and clean up any orphaned references (e.g., terrain sets pointing to deleted tilesets)
         project.validate_and_cleanup();
 

@@ -9,7 +9,7 @@ pub use file::*;
 use bevy::prelude::Resource;
 use bevy_map_animation::SpriteData;
 use bevy_map_autotile::AutotileConfig;
-use bevy_map_core::{Level, Tileset};
+use bevy_map_core::{Level, Tileset, WorldConfig};
 use bevy_map_dialogue::DialogueTree;
 use bevy_map_schema::Schema;
 use serde::{Deserialize, Serialize};
@@ -38,8 +38,21 @@ pub struct Project {
     /// Dialogue tree assets
     #[serde(default)]
     pub dialogues: Vec<DialogueTree>,
+    /// World configuration (layout mode, connections)
+    #[serde(default)]
+    pub world_config: WorldConfig,
     #[serde(skip)]
     pub dirty: bool,
+
+    // Performance indices - O(1) lookups instead of O(n) iter().find()
+    #[serde(skip)]
+    level_index: HashMap<Uuid, usize>,
+    #[serde(skip)]
+    tileset_index: HashMap<Uuid, usize>,
+    #[serde(skip)]
+    sprite_sheet_index: HashMap<Uuid, usize>,
+    #[serde(skip)]
+    dialogue_index: HashMap<String, usize>,
 }
 
 impl Default for Project {
@@ -55,7 +68,12 @@ impl Default for Project {
             autotile_config: AutotileConfig::default(),
             sprite_sheets: Vec::new(),
             dialogues: Vec::new(),
+            world_config: WorldConfig::default(),
             dirty: false,
+            level_index: HashMap::new(),
+            tileset_index: HashMap::new(),
+            sprite_sheet_index: HashMap::new(),
+            dialogue_index: HashMap::new(),
         }
     }
 }
@@ -73,7 +91,35 @@ impl Project {
             autotile_config: AutotileConfig::default(),
             sprite_sheets: Vec::new(),
             dialogues: Vec::new(),
+            world_config: WorldConfig::default(),
             dirty: false,
+            level_index: HashMap::new(),
+            tileset_index: HashMap::new(),
+            sprite_sheet_index: HashMap::new(),
+            dialogue_index: HashMap::new(),
+        }
+    }
+
+    /// Rebuild all lookup indices. Call after loading or bulk modifications.
+    pub fn rebuild_indices(&mut self) {
+        self.level_index.clear();
+        for (idx, level) in self.levels.iter().enumerate() {
+            self.level_index.insert(level.id, idx);
+        }
+
+        self.tileset_index.clear();
+        for (idx, tileset) in self.tilesets.iter().enumerate() {
+            self.tileset_index.insert(tileset.id, idx);
+        }
+
+        self.sprite_sheet_index.clear();
+        for (idx, sprite_sheet) in self.sprite_sheets.iter().enumerate() {
+            self.sprite_sheet_index.insert(sprite_sheet.id, idx);
+        }
+
+        self.dialogue_index.clear();
+        for (idx, dialogue) in self.dialogues.iter().enumerate() {
+            self.dialogue_index.insert(dialogue.id.clone(), idx);
         }
     }
 
@@ -142,19 +188,69 @@ impl Project {
 
     /// Add a new level
     pub fn add_level(&mut self, level: Level) {
+        let id = level.id;
+        let idx = self.levels.len();
         self.levels.push(level);
+        self.level_index.insert(id, idx);
         self.dirty = true;
     }
 
-    /// Get level by ID
+    /// Get level by ID (O(1) lookup)
     pub fn get_level(&self, id: Uuid) -> Option<&Level> {
-        self.levels.iter().find(|l| l.id == id)
+        self.level_index
+            .get(&id)
+            .and_then(|&idx| self.levels.get(idx))
     }
 
-    /// Get mutable level by ID
+    /// Get mutable level by ID (O(1) lookup)
     pub fn get_level_mut(&mut self, id: Uuid) -> Option<&mut Level> {
         self.dirty = true;
-        self.levels.iter_mut().find(|l| l.id == id)
+        self.level_index
+            .get(&id)
+            .copied()
+            .and_then(|idx| self.levels.get_mut(idx))
+    }
+
+    /// Get tileset by ID (O(1) lookup)
+    pub fn get_tileset(&self, id: Uuid) -> Option<&Tileset> {
+        self.tileset_index
+            .get(&id)
+            .and_then(|&idx| self.tilesets.get(idx))
+    }
+
+    /// Get mutable tileset by ID (O(1) lookup)
+    pub fn get_tileset_mut(&mut self, id: Uuid) -> Option<&mut Tileset> {
+        self.dirty = true;
+        self.tileset_index
+            .get(&id)
+            .copied()
+            .and_then(|idx| self.tilesets.get_mut(idx))
+    }
+
+    /// Add a new tileset
+    pub fn add_tileset(&mut self, tileset: Tileset) {
+        let id = tileset.id;
+        let idx = self.tilesets.len();
+        self.tilesets.push(tileset);
+        self.tileset_index.insert(id, idx);
+        self.dirty = true;
+    }
+
+    /// Remove a tileset by ID
+    pub fn remove_tileset(&mut self, id: Uuid) -> Option<Tileset> {
+        if let Some(&idx) = self.tileset_index.get(&id) {
+            self.tileset_index.remove(&id);
+            let removed = self.tilesets.remove(idx);
+            // Rebuild indices after removal (indices shifted)
+            self.tileset_index.clear();
+            for (i, tileset) in self.tilesets.iter().enumerate() {
+                self.tileset_index.insert(tileset.id, i);
+            }
+            self.dirty = true;
+            Some(removed)
+        } else {
+            None
+        }
     }
 
     /// Duplicate a data instance by ID, returns the new instance's ID
@@ -176,9 +272,16 @@ impl Project {
 
     /// Remove a level by ID
     pub fn remove_level(&mut self, id: Uuid) -> Option<Level> {
-        if let Some(pos) = self.levels.iter().position(|l| l.id == id) {
+        if let Some(&idx) = self.level_index.get(&id) {
+            self.level_index.remove(&id);
+            let removed = self.levels.remove(idx);
+            // Rebuild indices after removal (indices shifted)
+            self.level_index.clear();
+            for (i, level) in self.levels.iter().enumerate() {
+                self.level_index.insert(level.id, i);
+            }
             self.dirty = true;
-            Some(self.levels.remove(pos))
+            Some(removed)
         } else {
             None
         }
@@ -206,26 +309,41 @@ impl Project {
 
     /// Add a new sprite sheet asset
     pub fn add_sprite_sheet(&mut self, sprite_sheet: SpriteData) {
+        let id = sprite_sheet.id;
+        let idx = self.sprite_sheets.len();
         self.sprite_sheets.push(sprite_sheet);
+        self.sprite_sheet_index.insert(id, idx);
         self.dirty = true;
     }
 
-    /// Get a sprite sheet by ID
+    /// Get a sprite sheet by ID (O(1) lookup)
     pub fn get_sprite_sheet(&self, id: Uuid) -> Option<&SpriteData> {
-        self.sprite_sheets.iter().find(|a| a.id == id)
+        self.sprite_sheet_index
+            .get(&id)
+            .and_then(|&idx| self.sprite_sheets.get(idx))
     }
 
-    /// Get mutable sprite sheet by ID
+    /// Get mutable sprite sheet by ID (O(1) lookup)
     pub fn get_sprite_sheet_mut(&mut self, id: Uuid) -> Option<&mut SpriteData> {
         self.dirty = true;
-        self.sprite_sheets.iter_mut().find(|a| a.id == id)
+        self.sprite_sheet_index
+            .get(&id)
+            .copied()
+            .and_then(|idx| self.sprite_sheets.get_mut(idx))
     }
 
     /// Remove a sprite sheet by ID
     pub fn remove_sprite_sheet(&mut self, id: Uuid) -> Option<SpriteData> {
-        if let Some(pos) = self.sprite_sheets.iter().position(|a| a.id == id) {
+        if let Some(&idx) = self.sprite_sheet_index.get(&id) {
+            self.sprite_sheet_index.remove(&id);
+            let removed = self.sprite_sheets.remove(idx);
+            // Rebuild indices after removal
+            self.sprite_sheet_index.clear();
+            for (i, ss) in self.sprite_sheets.iter().enumerate() {
+                self.sprite_sheet_index.insert(ss.id, i);
+            }
             self.dirty = true;
-            Some(self.sprite_sheets.remove(pos))
+            Some(removed)
         } else {
             None
         }
@@ -235,26 +353,41 @@ impl Project {
 
     /// Add a new dialogue tree
     pub fn add_dialogue(&mut self, dialogue: DialogueTree) {
+        let id = dialogue.id.clone();
+        let idx = self.dialogues.len();
         self.dialogues.push(dialogue);
+        self.dialogue_index.insert(id, idx);
         self.dirty = true;
     }
 
-    /// Get a dialogue by ID
+    /// Get a dialogue by ID (O(1) lookup)
     pub fn get_dialogue(&self, id: &str) -> Option<&DialogueTree> {
-        self.dialogues.iter().find(|d| d.id == id)
+        self.dialogue_index
+            .get(id)
+            .and_then(|&idx| self.dialogues.get(idx))
     }
 
-    /// Get mutable dialogue by ID
+    /// Get mutable dialogue by ID (O(1) lookup)
     pub fn get_dialogue_mut(&mut self, id: &str) -> Option<&mut DialogueTree> {
         self.dirty = true;
-        self.dialogues.iter_mut().find(|d| d.id == id)
+        self.dialogue_index
+            .get(id)
+            .copied()
+            .and_then(|idx| self.dialogues.get_mut(idx))
     }
 
     /// Remove a dialogue by ID
     pub fn remove_dialogue(&mut self, id: &str) -> Option<DialogueTree> {
-        if let Some(pos) = self.dialogues.iter().position(|d| d.id == id) {
+        if let Some(&idx) = self.dialogue_index.get(id) {
+            self.dialogue_index.remove(id);
+            let removed = self.dialogues.remove(idx);
+            // Rebuild indices after removal
+            self.dialogue_index.clear();
+            for (i, d) in self.dialogues.iter().enumerate() {
+                self.dialogue_index.insert(d.id.clone(), i);
+            }
             self.dirty = true;
-            Some(self.dialogues.remove(pos))
+            Some(removed)
         } else {
             None
         }
