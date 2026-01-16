@@ -20,6 +20,16 @@ pub enum PendingAction {
     Copy,
     Paste,
     SelectAll,
+    /// Create a stamp from the current tile selection
+    CreateStampFromSelection,
+    /// Open the game settings dialog
+    OpenGameSettings,
+    /// Run the game (save first, then launch)
+    RunGame,
+    /// Create a new game project using Bevy CLI
+    CreateGameProject,
+    /// Install Bevy CLI
+    InstallBevyCli,
 }
 
 /// Render all dialogs
@@ -67,6 +77,25 @@ pub fn render_dialogs(
                 if project.path.is_some() {
                     if let Err(e) = project.save_current() {
                         editor_state.error_message = Some(format!("Failed to save: {}", e));
+                    } else {
+                        // Auto-sync to game if running (triggers hot-reload)
+                        if let crate::game_runner::GameBuildState::Running { .. } =
+                            &editor_state.game_build_state
+                        {
+                            if let (Some(map_path), Some(game_path)) =
+                                (&project.path, &project.game_config.project_path)
+                            {
+                                if let Err(e) =
+                                    crate::game_runner::sync_map_to_game(map_path, game_path)
+                                {
+                                    bevy::log::warn!("Failed to sync to running game: {}", e);
+                                } else {
+                                    bevy::log::info!(
+                                        "Synced map to running game (hot-reload triggered)"
+                                    );
+                                }
+                            }
+                        }
                     }
                 } else {
                     // No path set, trigger Save As
@@ -257,8 +286,7 @@ fn create_tileset_from_path(
         0, // rows
     );
     let tileset_id = tileset.id;
-    project.tilesets.push(tileset);
-    project.mark_dirty();
+    project.add_tileset(tileset);
     editor_state.selected_tileset = Some(tileset_id);
     editor_state.show_new_tileset_dialog = false;
 

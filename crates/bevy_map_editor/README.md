@@ -22,6 +22,30 @@ Part of [bevy_map_editor](https://github.com/jbuehler23/bevy_map_editor).
 - Undo/redo support
 - Keyboard shortcuts
 
+### Run Game & Live Editing
+
+Launch and test your game directly from the editor:
+
+- **Run Game** - Build and launch your game with one click
+- **Live editing** - Edit maps while the game runs (non-blocking)
+- **Auto-sync** - Save (Ctrl+S) automatically syncs to running game
+- **Hot-reload** - Changes appear instantly via Bevy's file watcher
+- **Game Settings** - Configure game project path and starting level
+
+<!-- TODO: Add GIF -->
+![Run Game](../../docs/gifs/run_game.gif)
+
+### Tile Flipping
+
+- Press **X** to toggle horizontal flip while painting
+- Press **Y** to toggle vertical flip while painting
+- Tiled-compatible flip flags exported in map files
+
+### Stamps
+
+- **Ctrl+Shift+S** - Create reusable stamp from tile selection
+- Access saved stamps from Stamp Library panel
+
 ## Installation (Standalone Binary)
 
 ### From crates.io
@@ -84,18 +108,22 @@ bevy_map_editor = { version = "0.1", features = ["runtime"] }
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action       |
-|----------------|--------------|
-| `Ctrl+N`       | New Project  |
-| `Ctrl+O`       | Open Project |
-| `Ctrl+S`       | Save         |
-| `Ctrl+Shift+S` | Save As      |
-| `Ctrl+Z`       | Undo         |
-| `Ctrl+Y`       | Redo         |
-| `Ctrl+C`       | Copy         |
-| `Ctrl+V`       | Paste        |
-| `Ctrl+X`       | Cut          |
-| `G`            | Toggle Grid  |
+| Shortcut       | Action                        |
+|----------------|-------------------------------|
+| `Ctrl+N`       | New Project                   |
+| `Ctrl+O`       | Open Project                  |
+| `Ctrl+S`       | Save (+ sync if game running) |
+| `Ctrl+Shift+S` | Create Stamp from Selection   |
+| `Ctrl+Z`       | Undo                          |
+| `Ctrl+Y`       | Redo                          |
+| `Ctrl+C`       | Copy                          |
+| `Ctrl+V`       | Paste                         |
+| `Ctrl+X`       | Cut                           |
+| `G`            | Toggle Grid                   |
+| `X`            | Toggle Horizontal Flip        |
+| `Y`            | Toggle Vertical Flip          |
+| `W`            | Toggle World View             |
+| `L`            | Switch to Level View          |
 
 ## License
 

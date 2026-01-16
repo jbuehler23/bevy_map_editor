@@ -38,6 +38,10 @@ pub fn handle_keyboard_shortcuts(
         if keyboard.just_pressed(KeyCode::KeyA) {
             editor_state.pending_action = Some(PendingAction::SelectAll);
         }
+        // Ctrl+Shift+S - Create Stamp from Selection
+        if keyboard.just_pressed(KeyCode::KeyS) && shift {
+            editor_state.pending_action = Some(PendingAction::CreateStampFromSelection);
+        }
         // Ctrl+S - Save
         if keyboard.just_pressed(KeyCode::KeyS) {
             editor_state.pending_action = Some(PendingAction::Save);
@@ -84,6 +88,16 @@ pub fn handle_keyboard_shortcuts(
         // L key - switch to Level view
         if keyboard.just_pressed(KeyCode::KeyL) {
             editor_state.view_mode = EditorViewMode::Level;
+        }
+
+        // X key - toggle horizontal flip for painting
+        if keyboard.just_pressed(KeyCode::KeyX) {
+            editor_state.paint_flip_x = !editor_state.paint_flip_x;
+        }
+
+        // Y key - toggle vertical flip for painting
+        if keyboard.just_pressed(KeyCode::KeyY) {
+            editor_state.paint_flip_y = !editor_state.paint_flip_y;
         }
     }
 }

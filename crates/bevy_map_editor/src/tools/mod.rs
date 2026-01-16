@@ -58,6 +58,8 @@ pub struct ViewportInputState {
     pub last_paint_world_pos: Option<Vec2>,
     /// Whether full-tile mode was active for the last preview (to detect mode changes)
     pub last_preview_full_tile_mode: bool,
+    /// Anchor tile position for line brush (Shift+Click draws line from anchor to click)
+    pub line_brush_anchor: Option<(i32, i32)>,
 }
 
 /// Tracks tile changes during a painting stroke for undo support
@@ -167,17 +169,44 @@ fn calculate_targets_bounds(
     (min_x, min_y, max_x, max_y)
 }
 
-/// Get the grid size (width, height) for the currently selected tile
-/// Returns (1, 1) if no tile is selected or tileset not found
-fn get_selected_tile_grid_size(editor_state: &EditorState, project: &Project) -> (u32, u32) {
-    if let (Some(tile_id), Some(tileset_id)) =
-        (editor_state.selected_tile, editor_state.selected_tileset)
-    {
-        if let Some(tileset) = project.tilesets.iter().find(|t| t.id == tileset_id) {
-            return tileset.get_tile_grid_size(tile_id);
+/// Bresenham's line algorithm - generates all tile coordinates along a line
+fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
+    let mut points = Vec::new();
+
+    let dx = (x1 - x0).abs();
+    let dy = -(y1 - y0).abs();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+
+    let mut x = x0;
+    let mut y = y0;
+
+    loop {
+        points.push((x, y));
+
+        if x == x1 && y == y1 {
+            break;
+        }
+
+        let e2 = 2 * err;
+        if e2 >= dy {
+            if x == x1 {
+                break;
+            }
+            err += dy;
+            x += sx;
+        }
+        if e2 <= dx {
+            if y == y1 {
+                break;
+            }
+            err += dx;
+            y += sy;
         }
     }
-    (1, 1) // Default to 1x1
+
+    points
 }
 
 /// System to handle viewport input (painting, panning)
@@ -226,9 +255,10 @@ fn handle_viewport_input(
         editor_state.pending_cancel_move = false;
     }
 
-    // Check if egui wants the pointer (is over any interactive widget)
-    // Use wants_pointer_input() instead of is_using_pointer() to catch button clicks
-    let egui_wants_pointer = ctx.wants_pointer_input() || ctx.is_using_pointer();
+    // Check if egui is actively using the pointer (dragging, clicking on widgets)
+    // Note: wants_pointer_input() is too broad - it returns true for entire CentralPanel
+    // even when there are no interactive widgets, blocking viewport input.
+    let egui_wants_pointer = ctx.is_using_pointer();
 
     // If egui wants the pointer and we're not in the middle of a rectangle draw,
     // block input. But always allow rectangle operations to complete.
@@ -555,7 +585,7 @@ fn handle_viewport_input(
     }
 
     // Update brush preview position for Paint tool (non-terrain mode)
-    // Uses center-anchoring: cursor appears at center of tile/multi-cell region
+    // Preview appears on the tile the mouse is currently over
     if editor_state.current_tool == EditorTool::Paint
         && !editor_state.terrain_paint_state.is_terrain_mode
         && editor_state.selected_tile.is_some()
@@ -563,14 +593,9 @@ fn handle_viewport_input(
         && !pointer_over_right_panel
         && !modal_editor_open
     {
-        // Get grid size for center-anchor offset calculation
-        let (grid_width, grid_height) = get_selected_tile_grid_size(&editor_state, &project);
-        let offset_x = (grid_width as f32 * tile_size) / 2.0;
-        let offset_y = (grid_height as f32 * tile_size) / 2.0;
-
-        // Center-anchored: offset by half tile size before floor
-        let tile_x = ((world_pos.x - offset_x) / tile_size).floor() as i32;
-        let tile_y = ((world_pos.y - offset_y) / tile_size).floor() as i32;
+        // Simple floor division to get tile under cursor
+        let tile_x = (world_pos.x / tile_size).floor() as i32;
+        let tile_y = (world_pos.y / tile_size).floor() as i32;
         editor_state.brush_preview.position = Some((tile_x, tile_y));
         editor_state.brush_preview.active = true;
     } else {
@@ -578,19 +603,64 @@ fn handle_viewport_input(
         editor_state.brush_preview.position = None;
     }
 
+    // Check for Shift key (used for line brush)
+    let shift_pressed =
+        keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+
     // Point mode painting (continuous while dragging)
     if mouse_buttons.pressed(MouseButton::Left) && !input_state.is_panning && !is_rectangle_mode {
         match editor_state.current_tool {
             EditorTool::Paint => {
-                paint_tile(
-                    &mut commands,
-                    &mut editor_state,
-                    &mut project,
-                    &mut render_state,
-                    &mut stroke_tracker,
-                    &tileset_cache,
-                    world_pos,
-                );
+                // Get current tile position for line brush anchor tracking
+                let current_tile_x = (world_pos.x / tile_size).floor() as i32;
+                let current_tile_y = (world_pos.y / tile_size).floor() as i32;
+
+                // Line brush: Shift+Click draws line from anchor to current position
+                if mouse_buttons.just_pressed(MouseButton::Left)
+                    && shift_pressed
+                    && input_state.line_brush_anchor.is_some()
+                {
+                    let (anchor_x, anchor_y) = input_state.line_brush_anchor.unwrap();
+                    let line_points =
+                        bresenham_line(anchor_x, anchor_y, current_tile_x, current_tile_y);
+
+                    // Paint each tile along the line
+                    for (lx, ly) in line_points {
+                        // Convert tile coords back to world position (center of tile)
+                        let world_x = (lx as f32 + 0.5) * tile_size;
+                        let world_y = (ly as f32 + 0.5) * tile_size;
+                        paint_tile(
+                            &mut commands,
+                            &mut editor_state,
+                            &mut project,
+                            &mut render_state,
+                            &mut stroke_tracker,
+                            &tileset_cache,
+                            Vec2::new(world_x, world_y),
+                        );
+                        // Clear last_painted_tile to allow painting each point
+                        editor_state.last_painted_tile = None;
+                    }
+
+                    // Update anchor to new position
+                    input_state.line_brush_anchor = Some((current_tile_x, current_tile_y));
+                } else {
+                    // Normal painting
+                    paint_tile(
+                        &mut commands,
+                        &mut editor_state,
+                        &mut project,
+                        &mut render_state,
+                        &mut stroke_tracker,
+                        &tileset_cache,
+                        world_pos,
+                    );
+
+                    // Update line brush anchor on first click of stroke
+                    if mouse_buttons.just_pressed(MouseButton::Left) {
+                        input_state.line_brush_anchor = Some((current_tile_x, current_tile_y));
+                    }
+                }
             }
             EditorTool::Terrain => {
                 // Ctrl+click enables full-tile mode (paints all 8 positions of tile)
@@ -609,15 +679,56 @@ fn handle_viewport_input(
                 );
             }
             EditorTool::Erase => {
-                erase_tile(
-                    &mut commands,
-                    &mut editor_state,
-                    &mut project,
-                    &mut render_state,
-                    &mut stroke_tracker,
-                    &tileset_cache,
-                    world_pos,
-                );
+                // Get current tile position for line brush anchor tracking
+                let current_tile_x = (world_pos.x / tile_size).floor() as i32;
+                let current_tile_y = (world_pos.y / tile_size).floor() as i32;
+
+                // Line brush for erase: Shift+Click erases line from anchor to current position
+                if mouse_buttons.just_pressed(MouseButton::Left)
+                    && shift_pressed
+                    && input_state.line_brush_anchor.is_some()
+                {
+                    let (anchor_x, anchor_y) = input_state.line_brush_anchor.unwrap();
+                    let line_points =
+                        bresenham_line(anchor_x, anchor_y, current_tile_x, current_tile_y);
+
+                    // Erase each tile along the line
+                    for (lx, ly) in line_points {
+                        // Convert tile coords back to world position (center of tile)
+                        let world_x = (lx as f32 + 0.5) * tile_size;
+                        let world_y = (ly as f32 + 0.5) * tile_size;
+                        erase_tile(
+                            &mut commands,
+                            &mut editor_state,
+                            &mut project,
+                            &mut render_state,
+                            &mut stroke_tracker,
+                            &tileset_cache,
+                            Vec2::new(world_x, world_y),
+                        );
+                        // Clear last_painted_tile to allow erasing each point
+                        editor_state.last_painted_tile = None;
+                    }
+
+                    // Update anchor to new position
+                    input_state.line_brush_anchor = Some((current_tile_x, current_tile_y));
+                } else {
+                    // Normal erasing
+                    erase_tile(
+                        &mut commands,
+                        &mut editor_state,
+                        &mut project,
+                        &mut render_state,
+                        &mut stroke_tracker,
+                        &tileset_cache,
+                        world_pos,
+                    );
+
+                    // Update line brush anchor on first click of stroke
+                    if mouse_buttons.just_pressed(MouseButton::Left) {
+                        input_state.line_brush_anchor = Some((current_tile_x, current_tile_y));
+                    }
+                }
             }
             _ => {}
         }
@@ -1030,12 +1141,30 @@ fn paint_tile(
     let Some(layer_idx) = editor_state.selected_layer else {
         return;
     };
-    let Some(tile_index) = editor_state.selected_tile else {
-        return;
-    };
     let Some(selected_tileset) = editor_state.selected_tileset else {
         return;
     };
+
+    // Determine which tile to paint: random from set or selected tile
+    let base_tile_index =
+        if editor_state.random_paint && !editor_state.random_paint_tiles.is_empty() {
+            // Pick random tile from the random paint set
+            let idx = fastrand::usize(..editor_state.random_paint_tiles.len());
+            editor_state.random_paint_tiles[idx]
+        } else {
+            // Use the normally selected tile
+            let Some(tile) = editor_state.selected_tile else {
+                return;
+            };
+            tile
+        };
+
+    // Apply flip flags to the tile index
+    let tile_index = bevy_map_core::tile_with_flips(
+        base_tile_index,
+        editor_state.paint_flip_x,
+        editor_state.paint_flip_y,
+    );
 
     // Can only paint tiles on Tile layers
     if !is_tile_layer(project, level_id, layer_idx) {
@@ -1044,22 +1173,21 @@ fn paint_tile(
 
     // Get tile size and grid size from the selected tileset and collect valid tileset IDs
     // (collect before mutable borrow of level)
+    // Use base_tile_index for grid size lookup (flip flags don't affect grid size)
     let tileset_info = project
         .tilesets
         .iter()
         .find(|t| t.id == selected_tileset)
-        .map(|t| (t.tile_size as f32, t.get_tile_grid_size(tile_index)));
+        .map(|t| (t.tile_size as f32, t.get_tile_grid_size(base_tile_index)));
     let tile_size = tileset_info.map(|(ts, _)| ts).unwrap_or(32.0);
     let (grid_width, grid_height) = tileset_info.map(|(_, gs)| gs).unwrap_or((1, 1));
     let is_multi_cell = grid_width > 1 || grid_height > 1;
     let valid_tileset_ids: HashSet<_> = project.tilesets.iter().map(|t| t.id).collect();
 
-    // Convert world position to tile coordinates with center-anchoring
-    // Offset by half the tile/multi-cell size so cursor appears at center
-    let offset_x = (grid_width as f32 * tile_size) / 2.0;
-    let offset_y = (grid_height as f32 * tile_size) / 2.0;
-    let tile_x = ((world_pos.x - offset_x) / tile_size).floor() as i32;
-    let tile_y = ((world_pos.y - offset_y) / tile_size).floor() as i32;
+    // Convert world position to tile coordinates
+    // Simple floor division to get tile under cursor
+    let tile_x = (world_pos.x / tile_size).floor() as i32;
+    let tile_y = (world_pos.y / tile_size).floor() as i32;
 
     // Don't repaint the same tile
     if editor_state.last_painted_tile == Some((tile_x as u32, tile_y as u32)) {

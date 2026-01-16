@@ -1,5 +1,6 @@
 //! Toolbar UI for tool selection
 
+use crate::ui::dialogs::PendingAction;
 use crate::{EditorState, EditorViewMode};
 use bevy_egui::egui;
 use serde::{Deserialize, Serialize};
@@ -144,6 +145,22 @@ pub fn render_toolbar(ctx: &egui::Context, editor_state: &mut EditorState) {
                         );
                     });
 
+                // Random paint toggle (for Paint tool only)
+                if editor_state.current_tool == EditorTool::Paint {
+                    ui.toggle_value(&mut editor_state.random_paint, "Random")
+                        .on_hover_text(
+                            "Paint random tiles from selection (Ctrl+click to add tiles)",
+                        );
+                }
+
+                // Flip toggles (for Paint tool)
+                if editor_state.current_tool == EditorTool::Paint {
+                    ui.toggle_value(&mut editor_state.paint_flip_x, "X")
+                        .on_hover_text("Flip tile horizontally (X key)");
+                    ui.toggle_value(&mut editor_state.paint_flip_y, "Y")
+                        .on_hover_text("Flip tile vertically (Y key)");
+                }
+
                 ui.separator();
             }
 
@@ -175,6 +192,16 @@ pub fn render_toolbar(ctx: &egui::Context, editor_state: &mut EditorState) {
             ui.separator();
             if ui.button("Tileset Editor").clicked() {
                 editor_state.show_tileset_editor = true;
+            }
+
+            // Run Game button
+            ui.separator();
+            if ui
+                .button("Run Game")
+                .on_hover_text("Run the game (saves project first)")
+                .clicked()
+            {
+                editor_state.pending_action = Some(PendingAction::RunGame);
             }
         });
     });

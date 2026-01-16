@@ -7,6 +7,61 @@ use uuid::Uuid;
 /// Sentinel value for cells occupied by multi-cell tiles (but not the base cell)
 pub const OCCUPIED_CELL: u32 = u32::MAX;
 
+// Tile flip flags (Tiled-compatible bit positions)
+/// Bit flag for horizontal flip (mirror on Y axis)
+pub const TILE_FLIP_X: u32 = 0x8000_0000;
+/// Bit flag for vertical flip (mirror on X axis)
+pub const TILE_FLIP_Y: u32 = 0x4000_0000;
+/// Bit flag for diagonal flip (for 90° rotations, combined with X/Y)
+pub const TILE_FLIP_DIAGONAL: u32 = 0x2000_0000;
+/// Mask to extract just the tile index (without flip flags)
+pub const TILE_INDEX_MASK: u32 = 0x1FFF_FFFF;
+/// Mask for all flip flags
+pub const TILE_FLIP_MASK: u32 = TILE_FLIP_X | TILE_FLIP_Y | TILE_FLIP_DIAGONAL;
+
+/// Extract the tile index from a tile value (strips flip flags)
+#[inline]
+pub fn tile_index(tile: u32) -> u32 {
+    tile & TILE_INDEX_MASK
+}
+
+/// Check if a tile has horizontal flip
+#[inline]
+pub fn tile_flip_x(tile: u32) -> bool {
+    tile & TILE_FLIP_X != 0
+}
+
+/// Check if a tile has vertical flip
+#[inline]
+pub fn tile_flip_y(tile: u32) -> bool {
+    tile & TILE_FLIP_Y != 0
+}
+
+/// Create a tile value with flip flags
+#[inline]
+pub fn tile_with_flips(index: u32, flip_x: bool, flip_y: bool) -> u32 {
+    let mut tile = index & TILE_INDEX_MASK;
+    if flip_x {
+        tile |= TILE_FLIP_X;
+    }
+    if flip_y {
+        tile |= TILE_FLIP_Y;
+    }
+    tile
+}
+
+/// Toggle horizontal flip on a tile value
+#[inline]
+pub fn toggle_flip_x(tile: u32) -> u32 {
+    tile ^ TILE_FLIP_X
+}
+
+/// Toggle vertical flip on a tile value
+#[inline]
+pub fn toggle_flip_y(tile: u32) -> u32 {
+    tile ^ TILE_FLIP_Y
+}
+
 /// A layer (tiles or objects)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Layer {

@@ -29,6 +29,7 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 image = "0.25"
 directories = "5"
+fastrand = "2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = { workspace = true, optional = true }

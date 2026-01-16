@@ -23,7 +23,9 @@
 //! }
 //! ```
 
+pub mod bevy_cli;
 pub mod commands;
+pub mod game_runner;
 pub mod preferences;
 pub mod project;
 pub mod render;
@@ -44,13 +46,14 @@ use std::path::PathBuf;
 
 use commands::clipboard::TileSelection;
 use commands::{handle_keyboard_shortcuts, CommandHistory, TileClipboard};
+use game_runner::{AsyncBuildHandle, GameBuildState};
 use project::Project;
 use render::MapRenderPlugin;
 use tools::EditorToolsPlugin;
 use ui::{
     AnimationEditorState, DialogueEditorState, EditorTool, EditorUiPlugin, EntityPaintState,
-    PendingAction, SchemaEditorState, Selection, SpriteSheetEditorState, TerrainPaintState,
-    TilesetEditorState, ToolMode,
+    GameSettingsDialogState, PendingAction, SchemaEditorState, Selection, SpriteSheetEditorState,
+    TerrainPaintState, TilesetEditorState, ToolMode,
 };
 
 /// Error types for asset path handling
@@ -552,6 +555,19 @@ pub struct EditorState {
     // Tile painting
     pub is_painting: bool,
     pub last_painted_tile: Option<(u32, u32)>,
+    /// When enabled, paint random tiles from a multi-tile selection
+    pub random_paint: bool,
+    /// Set of tiles available for random painting (Ctrl+click to add tiles)
+    pub random_paint_tiles: Vec<u32>,
+    /// Current tile flip state for painting (press X to toggle horizontal, Y for vertical)
+    pub paint_flip_x: bool,
+    pub paint_flip_y: bool,
+    /// Currently selected stamp for painting (overrides tile selection)
+    pub selected_stamp: Option<uuid::Uuid>,
+    /// Show the stamp library panel
+    pub show_stamp_library: bool,
+    /// Name for new stamp being created
+    pub new_stamp_name: String,
 
     // Autotile / Terrain (Legacy 47-tile blob)
     pub selected_terrain: Option<uuid::Uuid>,
@@ -661,6 +677,18 @@ pub struct EditorState {
     pub world_new_level_width: u32,
     /// Height for the new level (in tiles)
     pub world_new_level_height: u32,
+
+    // Game project settings
+    /// State for the game settings dialog
+    pub game_settings_dialog: GameSettingsDialogState,
+    /// Running game process (if any)
+    pub running_game: Option<std::process::Child>,
+
+    // Async game build state
+    /// Current state of the game build/run operation
+    pub game_build_state: GameBuildState,
+    /// Handle for the async build operation (receiver + cancel sender)
+    pub build_handle: Option<AsyncBuildHandle>,
 }
 
 impl Default for EditorState {
@@ -715,6 +743,13 @@ impl Default for EditorState {
 
             is_painting: false,
             last_painted_tile: None,
+            random_paint: false,
+            random_paint_tiles: Vec::new(),
+            paint_flip_x: false,
+            paint_flip_y: false,
+            selected_stamp: None,
+            show_stamp_library: false,
+            new_stamp_name: String::new(),
 
             selected_terrain: None,
             show_new_terrain_dialog: false,
@@ -782,6 +817,12 @@ impl Default for EditorState {
             world_new_level_name: String::new(),
             world_new_level_width: 50,
             world_new_level_height: 50,
+
+            game_settings_dialog: GameSettingsDialogState::default(),
+            running_game: None,
+
+            game_build_state: GameBuildState::default(),
+            build_handle: None,
         }
     }
 }

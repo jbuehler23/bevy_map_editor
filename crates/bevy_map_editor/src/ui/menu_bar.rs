@@ -172,6 +172,20 @@ pub fn render_menu_bar(
                     editor_state.show_new_tileset_dialog = true;
                     ui.close();
                 }
+                ui.separator();
+                if ui.button("Game Settings...").clicked() {
+                    editor_state.pending_action = Some(PendingAction::OpenGameSettings);
+                    ui.close();
+                }
+                // Show run option if game project is configured
+                let can_run = project.game_config.project_path.is_some()
+                    && project.game_config.starting_level.is_some();
+                ui.add_enabled_ui(can_run, |ui| {
+                    if ui.button("Run Game").clicked() {
+                        editor_state.pending_action = Some(PendingAction::RunGame);
+                        ui.close();
+                    }
+                });
             });
 
             // Tools menu - Specialized editors

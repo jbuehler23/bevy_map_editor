@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jbuehler23/bevy_map_editor"
@@ -24,15 +24,15 @@ rust-version = "1.76.0"
 
 [workspace.dependencies]
 # Internal crates (path for local dev, version for crates.io publishing)
-bevy_map = { version = "0.1.6", path = "crates/bevy_map" }
-bevy_map_core = { version = "0.1.6", path = "crates/bevy_map_core" }
-bevy_map_autotile = { version = "0.1.6", path = "crates/bevy_map_autotile" }
-bevy_map_animation = { version = "0.1.6", path = "crates/bevy_map_animation" }
-bevy_map_dialogue = { version = "0.1.6", path = "crates/bevy_map_dialogue" }
-bevy_map_derive = { version = "0.1.6", path = "crates/bevy_map_derive" }
-bevy_map_runtime = { version = "0.1.6", path = "crates/bevy_map_runtime" }
-bevy_map_schema = { version = "0.1.6", path = "crates/bevy_map_schema" }
-bevy_map_editor = { version = "0.1.6", path = "crates/bevy_map_editor" }
+bevy_map = { version = "0.2.0", path = "crates/bevy_map" }
+bevy_map_core = { version = "0.2.0", path = "crates/bevy_map_core" }
+bevy_map_autotile = { version = "0.2.0", path = "crates/bevy_map_autotile" }
+bevy_map_animation = { version = "0.2.0", path = "crates/bevy_map_animation" }
+bevy_map_dialogue = { version = "0.2.0", path = "crates/bevy_map_dialogue" }
+bevy_map_derive = { version = "0.2.0", path = "crates/bevy_map_derive" }
+bevy_map_runtime = { version = "0.2.0", path = "crates/bevy_map_runtime" }
+bevy_map_schema = { version = "0.2.0", path = "crates/bevy_map_schema" }
+bevy_map_editor = { version = "0.2.0", path = "crates/bevy_map_editor" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

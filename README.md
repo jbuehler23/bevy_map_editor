@@ -19,7 +19,38 @@ complex asset loading, you can specify when to load those as well for more contr
 
 ## Editor Features
 
-<!-- TODO: Add feature screenshots here -->
+### Run Game & Live Editing
+
+Launch your game directly from the editor and see changes in real-time:
+
+- **Run Game** button builds and launches your game project
+- **Live editing** - continue editing while the game runs
+- **Auto-sync on save** - press Ctrl+S to sync changes to the running game
+- **Hot-reload** - game automatically reloads the map via Bevy's asset watcher
+
+![Run Game Demo](docs/gifs/run_game.gif)
+
+**Game Settings Dialog** - Configure your game project path and starting level:
+
+![Game Settings](docs/images/game_settings.png)
+
+### Tile Flipping
+
+Flip tiles while painting for more variety:
+
+- **X key** - Toggle horizontal flip
+- **Y key** - Toggle vertical flip
+- Flip state shown in toolbar
+- Tiled-compatible flip flags in exported maps
+
+### Stamps (Tile Patterns)
+
+Save and reuse tile patterns:
+
+- **Ctrl+Shift+S** - Create stamp from current selection
+- Stamps preserve tile arrangement and flip states
+- Quick access from Stamp Library panel
+
 
 ### Terrain Painting
 Autotile terrain transitions using Wang tiles (Corner, Edge, Mixed modes). This is heavily inspired by [](https://github.com/mapeditor/tiled)
@@ -143,7 +174,6 @@ fn load_map(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 ```
 
-<!-- TODO: Add runtime screenshot here -->
 ![Runtime Screenshot](docs/images/runtime.png)
 
 ### Defining Custom Entities
@@ -224,16 +254,20 @@ Maps are saved as `.map.json` files [see example full-project JSON](examples/ass
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action         |
-|----------------|----------------|
-| `Ctrl+N`       | New Project    |
-| `Ctrl+O`       | Open Project   |
-| `Ctrl+S`       | Save           |
-| `Ctrl+Shift+S` | Save As        |
-| `Ctrl+Z`       | Undo           |
-| `Ctrl+Y`       | Redo           |
-| `Ctrl+C/V/X`   | Copy/Paste/Cut |
-| `G`            | Toggle Grid    |
+| Shortcut       | Action                        |
+|----------------|-------------------------------|
+| `Ctrl+N`       | New Project                   |
+| `Ctrl+O`       | Open Project                  |
+| `Ctrl+S`       | Save (+ sync if game running) |
+| `Ctrl+Shift+S` | Create Stamp from Selection   |
+| `Ctrl+Z`       | Undo                          |
+| `Ctrl+Y`       | Redo                          |
+| `Ctrl+C/V/X`   | Copy/Paste/Cut                |
+| `G`            | Toggle Grid                   |
+| `X`            | Toggle Horizontal Flip        |
+| `Y`            | Toggle Vertical Flip          |
+| `W`            | Toggle World View             |
+| `L`            | Switch to Level View          |
 
 ## Compatibility
 
@@ -247,7 +281,7 @@ Maps are saved as `.map.json` files [see example full-project JSON](examples/ass
 ## License
 
 Licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-Apache-2.0))
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 ## Contributing

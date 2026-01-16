@@ -253,12 +253,26 @@ fn render_multi_image_tileset(
                                             .rounding(0.0),
                                         );
 
-                                        // Draw selection border manually (doesn't obscure content)
+                                        // Draw selection and random paint borders
+                                        let in_random_set = editor_state
+                                            .random_paint_tiles
+                                            .contains(&virtual_index);
                                         if selected {
                                             ui.painter().rect_stroke(
                                                 response.rect,
                                                 0.0,
                                                 egui::Stroke::new(2.0, EditorTheme::ACCENT_BLUE),
+                                                egui::StrokeKind::Inside,
+                                            );
+                                        } else if in_random_set {
+                                            // Different color for random paint set tiles
+                                            ui.painter().rect_stroke(
+                                                response.rect,
+                                                0.0,
+                                                egui::Stroke::new(
+                                                    2.0,
+                                                    egui::Color32::from_rgb(150, 200, 100),
+                                                ),
                                                 egui::StrokeKind::Inside,
                                             );
                                         }
@@ -275,7 +289,35 @@ fn render_multi_image_tileset(
                                                 image.rows,
                                                 virtual_index,
                                             );
-                                            editor_state.selected_tile = Some(base_tile);
+
+                                            // Check for Ctrl modifier for random paint tile selection
+                                            let ctrl_held = ui.input(|i| i.modifiers.ctrl);
+                                            if ctrl_held && editor_state.random_paint {
+                                                // Toggle tile in random paint set
+                                                if let Some(pos) = editor_state
+                                                    .random_paint_tiles
+                                                    .iter()
+                                                    .position(|&t| t == base_tile)
+                                                {
+                                                    editor_state.random_paint_tiles.remove(pos);
+                                                } else {
+                                                    editor_state.random_paint_tiles.push(base_tile);
+                                                }
+                                                // Also select this tile for visual feedback
+                                                editor_state.selected_tile = Some(base_tile);
+                                            } else {
+                                                // Normal click - select tile and clear random set
+                                                editor_state.selected_tile = Some(base_tile);
+                                                if !ctrl_held {
+                                                    editor_state.random_paint_tiles.clear();
+                                                    // Add selected tile to random set if random paint is on
+                                                    if editor_state.random_paint {
+                                                        editor_state
+                                                            .random_paint_tiles
+                                                            .push(base_tile);
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         let hover_text = if is_multi_cell {

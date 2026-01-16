@@ -7,6 +7,7 @@ mod asset_browser;
 mod dialogs;
 mod dialogue_editor;
 mod entity_palette;
+mod game_settings_dialog;
 mod inspector;
 mod menu_bar;
 mod new_project_dialog;
@@ -27,6 +28,7 @@ pub use asset_browser::{render_asset_browser, AssetBrowserResult, AssetBrowserSt
 pub use dialogs::*;
 pub use dialogue_editor::{render_dialogue_editor, DialogueEditorResult, DialogueEditorState};
 pub use entity_palette::{render_entity_palette, EntityPaintState};
+pub use game_settings_dialog::GameSettingsDialogState;
 pub use inspector::{get_default_value, render_inspector, InspectorResult, Selection};
 pub use menu_bar::*;
 pub use schema_editor::{render_schema_editor, SchemaEditorState};
@@ -997,7 +999,7 @@ fn render_ui(
             duplicate.id = Uuid::new_v4();
             duplicate.name = format!("{} (Copy)", duplicate.name);
             let new_id = duplicate.id;
-            project.tilesets.push(duplicate);
+            project.add_tileset(duplicate);
             editor_state.selection = Selection::Tileset(new_id);
             editor_state.selected_tileset = Some(new_id);
         }
@@ -1005,7 +1007,7 @@ fn render_ui(
 
     // Handle tileset deletion
     if let Some(tileset_id) = tree_view_result.delete_tileset {
-        project.tilesets.retain(|t| t.id != tileset_id);
+        project.remove_tileset(tileset_id);
 
         // Cascade delete: remove terrain sets that used this tileset
         let removed_count = project
@@ -1202,6 +1204,34 @@ fn render_ui(
     // Dialogs
     render_dialogs(ctx, &mut editor_state, &mut project, &assets_base_path);
 
+    // Game settings dialog
+    let game_settings_result = game_settings_dialog::render_game_settings_dialog(
+        ctx,
+        &mut editor_state.game_settings_dialog,
+        &mut project,
+    );
+    // Handle game settings results (handled in process_edit_actions)
+    if game_settings_result.create_project_requested {
+        editor_state.pending_action = Some(PendingAction::CreateGameProject);
+    }
+    if game_settings_result.install_cli_requested {
+        editor_state.pending_action = Some(PendingAction::InstallBevyCli);
+    }
+
+    // Build progress dialog (shown during game build)
+    let build_progress_result = render_build_progress(ctx, &mut editor_state);
+    if build_progress_result.cancel_requested {
+        // Cancel the build
+        if let Some(ref handle) = editor_state.build_handle {
+            let _ = handle.cancel_sender.send(());
+        }
+        editor_state.build_handle = None;
+        editor_state.game_build_state = crate::game_runner::GameBuildState::Idle;
+    }
+    if build_progress_result.close_requested {
+        editor_state.game_build_state = crate::game_runner::GameBuildState::Idle;
+    }
+
     // Terrain dialogs
     terrain::render_new_terrain_dialog(ctx, &mut editor_state, &mut project);
     terrain::render_new_terrain_set_dialog(ctx, &mut editor_state, &mut project);
@@ -1392,11 +1422,538 @@ fn process_edit_actions(
             PendingAction::SelectAll => {
                 select_all_visible_tiles(&mut editor_state, &project);
             }
+            PendingAction::CreateStampFromSelection => {
+                create_stamp_from_selection(&mut editor_state, &mut project);
+            }
+            PendingAction::OpenGameSettings => {
+                // Initialize dialog state from project config
+                editor_state
+                    .game_settings_dialog
+                    .load_from_project(&project);
+                editor_state.game_settings_dialog.open = true;
+            }
+            PendingAction::RunGame => {
+                handle_run_game(&mut editor_state, &mut project);
+            }
+            PendingAction::CreateGameProject => {
+                handle_create_game_project(&mut editor_state);
+            }
+            PendingAction::InstallBevyCli => {
+                handle_install_bevy_cli(&mut editor_state);
+            }
             // File operations are handled in dialogs.rs
             _ => {
                 // Put the action back so dialogs.rs can handle it
                 editor_state.pending_action = Some(action);
             }
+        }
+    }
+}
+
+/// Handle the "Run Game" action - launches async build with progress display
+fn handle_run_game(editor_state: &mut EditorState, project: &mut Project) {
+    use crate::game_runner::{
+        get_build_log_path, launch_game_async, sync_all_assets_to_game, GameBuildState,
+        LaunchOptions,
+    };
+
+    // Check if game project is configured and get the values we need
+    let Some(project_path) = project.game_config.project_path.clone() else {
+        editor_state.error_message =
+            Some("Game project not configured. Go to Project > Game Settings.".to_string());
+        return;
+    };
+
+    // Check if map is saved
+    let Some(map_path) = project.path.clone() else {
+        editor_state.error_message =
+            Some("Save the map project before running the game.".to_string());
+        return;
+    };
+
+    // Get assets base path (directory containing the project file)
+    let assets_base_path = map_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let use_release_build = project.game_config.use_release_build;
+
+    // Save the project first
+    if let Err(e) = project.save_current() {
+        editor_state.error_message = Some(format!("Failed to save project: {}", e));
+        return;
+    }
+
+    // Sync all assets (map, tilesets, sprite sheets) to game's assets folder
+    if let Err(e) = sync_all_assets_to_game(project, &map_path, &project_path, &assets_base_path) {
+        editor_state.error_message = Some(format!("Failed to sync assets: {}", e));
+        return;
+    }
+
+    // Kill any existing game process
+    crate::game_runner::kill_game(&mut editor_state.running_game);
+
+    // Create log file path
+    let log_file_path = get_build_log_path();
+
+    // Launch the game asynchronously
+    let options = LaunchOptions {
+        project_path,
+        release: use_release_build,
+        hot_reload: true,
+    };
+
+    match launch_game_async(options) {
+        Ok(handle) => {
+            editor_state.build_handle = Some(handle);
+            editor_state.game_build_state = GameBuildState::Building {
+                progress: None,
+                current_crate: None,
+                output_lines: Vec::new(),
+                log_file_path: Some(log_file_path),
+            };
+        }
+        Err(e) => {
+            editor_state.error_message = Some(e.to_string());
+            editor_state.game_build_state = GameBuildState::Failed {
+                message: e.to_string(),
+                log_file_path: None,
+            };
+        }
+    }
+}
+
+/// Result of rendering the build progress dialog
+#[derive(Default)]
+pub struct BuildProgressResult {
+    /// User requested to cancel the build
+    pub cancel_requested: bool,
+    /// User closed the dialog
+    pub close_requested: bool,
+}
+
+/// Helper to open a file in the system's default application
+fn open_log_file(path: &std::path::Path) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path.to_string_lossy()])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(path).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+}
+
+/// Render the build progress dialog (modal window during game build)
+fn render_build_progress(
+    ctx: &egui::Context,
+    editor_state: &mut EditorState,
+) -> BuildProgressResult {
+    use crate::game_runner::{BuildOutput, GameBuildState};
+    use std::io::Write;
+
+    let mut result = BuildProgressResult::default();
+
+    // Only show when building, running, finished, or failed
+    let should_show = !matches!(editor_state.game_build_state, GameBuildState::Idle);
+    if !should_show {
+        return result;
+    }
+
+    // Poll build output from the receiver
+    // Collect all pending messages first to avoid borrow issues
+    let mut messages = Vec::new();
+    if let Some(ref handle) = editor_state.build_handle {
+        while let Some(output) = handle.try_recv() {
+            messages.push(output);
+        }
+    }
+
+    // Track if we need to clear the handle and preserve log path
+    let mut should_clear_handle = false;
+    let mut preserved_log_path: Option<PathBuf> = None;
+
+    // Get log file path for writing
+    let log_path = match &editor_state.game_build_state {
+        GameBuildState::Building { log_file_path, .. } => log_file_path.clone(),
+        _ => None,
+    };
+
+    // Process collected messages
+    for output in messages {
+        match output {
+            BuildOutput::Line(line) => {
+                // Write to log file
+                if let Some(ref path) = log_path {
+                    if let Ok(mut file) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(path)
+                    {
+                        let _ = writeln!(file, "{}", line);
+                    }
+                }
+
+                if let GameBuildState::Building { output_lines, .. } =
+                    &mut editor_state.game_build_state
+                {
+                    output_lines.push(line);
+                    // Keep only last 50 lines for UI display
+                    if output_lines.len() > 50 {
+                        output_lines.remove(0);
+                    }
+                }
+            }
+            BuildOutput::Progress(current, total) => {
+                if let GameBuildState::Building { progress, .. } =
+                    &mut editor_state.game_build_state
+                {
+                    *progress = Some((current, total));
+                }
+            }
+            BuildOutput::CurrentCrate(name) => {
+                if let GameBuildState::Building { current_crate, .. } =
+                    &mut editor_state.game_build_state
+                {
+                    *current_crate = Some(name);
+                }
+            }
+            BuildOutput::BuildComplete => {
+                // Preserve log path when transitioning
+                if let GameBuildState::Building { log_file_path, .. } =
+                    &editor_state.game_build_state
+                {
+                    preserved_log_path = log_file_path.clone();
+                }
+                editor_state.game_build_state = GameBuildState::Running {
+                    log_file_path: preserved_log_path.take(),
+                };
+            }
+            BuildOutput::BuildFailed(msg) => {
+                // Preserve log path when transitioning
+                if let GameBuildState::Building { log_file_path, .. } =
+                    &editor_state.game_build_state
+                {
+                    preserved_log_path = log_file_path.clone();
+                }
+                editor_state.game_build_state = GameBuildState::Failed {
+                    message: msg,
+                    log_file_path: preserved_log_path.take(),
+                };
+                should_clear_handle = true;
+            }
+            BuildOutput::GameStarted => {
+                // Preserve log path when transitioning
+                if let GameBuildState::Building { log_file_path, .. } =
+                    &editor_state.game_build_state
+                {
+                    preserved_log_path = log_file_path.clone();
+                }
+                editor_state.game_build_state = GameBuildState::Running {
+                    log_file_path: preserved_log_path.take(),
+                };
+            }
+            BuildOutput::GameExited(_code) => {
+                // Preserve log path when transitioning
+                let current_log_path = match &editor_state.game_build_state {
+                    GameBuildState::Running { log_file_path } => log_file_path.clone(),
+                    GameBuildState::Building { log_file_path, .. } => log_file_path.clone(),
+                    _ => None,
+                };
+                editor_state.game_build_state = GameBuildState::Finished {
+                    log_file_path: current_log_path,
+                };
+                should_clear_handle = true;
+            }
+        }
+    }
+
+    // Clear handle if needed (outside the borrow)
+    if should_clear_handle {
+        editor_state.build_handle = None;
+    }
+
+    // Modal overlay - only blocks input during Building state
+    let is_building = matches!(
+        editor_state.game_build_state,
+        GameBuildState::Building { .. }
+    );
+
+    if is_building {
+        egui::Area::new(egui::Id::new("build_progress_modal_overlay"))
+            .fixed_pos(egui::pos2(0.0, 0.0))
+            .order(egui::Order::Middle)
+            .show(ctx, |ui| {
+                let screen_rect = ctx.input(|i| {
+                    i.raw.screen_rect.unwrap_or(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1920.0, 1080.0),
+                    ))
+                });
+                let response =
+                    ui.allocate_response(screen_rect.size(), egui::Sense::click_and_drag());
+                ui.painter()
+                    .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+                // Consume all interactions
+                response.context_menu(|_| {});
+            });
+    }
+
+    // Show different UI based on state:
+    // - Building/Finished/Failed: modal dialog in center (with consistent ID so it properly closes)
+    // - Running: small corner indicator (non-blocking)
+    let is_running = matches!(
+        editor_state.game_build_state,
+        GameBuildState::Running { .. }
+    );
+
+    // Center dialog for Building/Finished/Failed states (NOT Running)
+    if !is_running {
+        // Determine title based on state
+        let title = match &editor_state.game_build_state {
+            GameBuildState::Building { .. } => "Building Game...",
+            GameBuildState::Finished { .. } => "Build Complete",
+            GameBuildState::Failed { .. } => "Build Failed",
+            GameBuildState::Idle | GameBuildState::Running { .. } => "",
+        };
+
+        if !title.is_empty() {
+            egui::Window::new(title)
+                .id(egui::Id::new("build_progress_dialog")) // Consistent ID
+                .collapsible(false)
+                .resizable(matches!(
+                    editor_state.game_build_state,
+                    GameBuildState::Building { .. }
+                ))
+                .default_width(500.0)
+                .default_height(300.0)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    match &editor_state.game_build_state {
+                        GameBuildState::Building {
+                            progress,
+                            current_crate,
+                            output_lines,
+                            log_file_path,
+                        } => {
+                            ui.heading("Building game...");
+                            ui.add_space(8.0);
+
+                            // Progress bar
+                            if let Some((current, total)) = progress {
+                                let fraction = *current as f32 / (*total).max(1) as f32;
+                                ui.add(
+                                    egui::ProgressBar::new(fraction)
+                                        .text(format!("{}/{}", current, total))
+                                        .animate(true),
+                                );
+                            } else {
+                                // Indeterminate progress
+                                ui.add(
+                                    egui::ProgressBar::new(0.0)
+                                        .text("Starting build...")
+                                        .animate(true),
+                                );
+                            }
+
+                            // Current crate
+                            if let Some(crate_name) = current_crate {
+                                ui.label(format!("Compiling: {}", crate_name));
+                            }
+
+                            ui.add_space(8.0);
+                            ui.separator();
+
+                            // Output log (scrollable)
+                            ui.label("Build Output (last 50 lines):");
+                            egui::ScrollArea::vertical()
+                                .max_height(150.0)
+                                .stick_to_bottom(true)
+                                .show(ui, |ui| {
+                                    for line in output_lines {
+                                        ui.label(egui::RichText::new(line).monospace().small());
+                                    }
+                                });
+
+                            ui.separator();
+
+                            // Buttons
+                            ui.horizontal(|ui| {
+                                if ui.button("Cancel").clicked() {
+                                    result.cancel_requested = true;
+                                }
+                                if let Some(path) = log_file_path {
+                                    if ui.button("Open Full Log").clicked() {
+                                        open_log_file(path);
+                                    }
+                                    ui.label(
+                                        egui::RichText::new(format!("Log: {}", path.display()))
+                                            .small()
+                                            .weak(),
+                                    );
+                                }
+                            });
+                        }
+                        GameBuildState::Finished { log_file_path } => {
+                            ui.heading("Build Complete");
+                            ui.add_space(8.0);
+                            ui.label("The game has finished running.");
+                            ui.add_space(8.0);
+
+                            ui.horizontal(|ui| {
+                                if ui.button("Close").clicked() {
+                                    result.close_requested = true;
+                                }
+                                if let Some(path) = log_file_path {
+                                    if ui.button("Open Full Log").clicked() {
+                                        open_log_file(path);
+                                    }
+                                }
+                            });
+                        }
+                        GameBuildState::Failed {
+                            message,
+                            log_file_path,
+                        } => {
+                            ui.heading("Build Failed");
+                            ui.add_space(8.0);
+                            ui.colored_label(egui::Color32::RED, message);
+                            ui.add_space(8.0);
+
+                            ui.horizontal(|ui| {
+                                if ui.button("Close").clicked() {
+                                    result.close_requested = true;
+                                }
+                                if let Some(path) = log_file_path {
+                                    if ui.button("Open Full Log").clicked() {
+                                        open_log_file(path);
+                                    }
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
+                });
+        }
+    }
+
+    // Corner indicator for Running state only
+    if let GameBuildState::Running { log_file_path } = &editor_state.game_build_state {
+        let log_path_clone = log_file_path.clone();
+
+        // Get screen size for default position (bottom-right corner)
+        let screen_rect = ctx.input(|i| i.viewport_rect());
+        let default_pos = egui::pos2(screen_rect.max.x - 180.0, screen_rect.max.y - 100.0);
+
+        egui::Window::new("Game Running")
+            .id(egui::Id::new("game_running_indicator"))
+            .collapsible(false)
+            .resizable(false)
+            .default_pos(default_pos)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    // Green indicator dot
+                    let (rect, _response) =
+                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                    ui.painter().circle_filled(
+                        rect.center(),
+                        5.0,
+                        egui::Color32::from_rgb(80, 200, 80),
+                    );
+                    ui.label(egui::RichText::new("Game Running").strong());
+                });
+
+                ui.add_space(4.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Stop Game").clicked() {
+                        // Send cancel signal to the build thread to kill the game process
+                        if let Some(ref handle) = editor_state.build_handle {
+                            handle.cancel();
+                        }
+                        editor_state.game_build_state = GameBuildState::Idle;
+                        editor_state.build_handle = None;
+                    }
+                    if let Some(path) = &log_path_clone {
+                        if ui.button("Log").clicked() {
+                            open_log_file(path);
+                        }
+                    }
+                });
+
+                ui.add_space(2.0);
+                ui.label(egui::RichText::new("Save to sync changes").small().weak());
+            });
+    }
+
+    result
+}
+
+/// Handle the "Create Game Project" action
+fn handle_create_game_project(editor_state: &mut EditorState) {
+    use crate::bevy_cli;
+
+    // Extract project name and parent directory from the full path
+    let Some(project_name) = editor_state.game_settings_dialog.get_project_name() else {
+        editor_state.error_message = Some("Invalid project path.".to_string());
+        return;
+    };
+
+    let Some(parent_dir) = editor_state.game_settings_dialog.get_parent_dir() else {
+        editor_state.error_message =
+            Some("Invalid project path - no parent directory.".to_string());
+        return;
+    };
+
+    // Create parent directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(&parent_dir) {
+        editor_state.error_message = Some(format!("Failed to create directory: {}", e));
+        return;
+    }
+
+    // Create the project using Bevy CLI
+    match bevy_cli::create_project(&project_name, &parent_dir) {
+        Ok(()) => {
+            editor_state.game_settings_dialog.status_message = Some(format!(
+                "Game project '{}' created successfully!",
+                project_name
+            ));
+            // Force re-check of path status
+            editor_state.game_settings_dialog.cli_installed = None;
+        }
+        Err(e) => {
+            editor_state.error_message = Some(format!("Failed to create project: {}", e));
+        }
+    }
+}
+
+/// Handle the "Install Bevy CLI" action
+fn handle_install_bevy_cli(editor_state: &mut EditorState) {
+    use crate::bevy_cli;
+
+    editor_state.game_settings_dialog.status_message =
+        Some("Installing Bevy CLI... This may take a few minutes.".to_string());
+
+    // Note: In a real implementation, this should be async/background task
+    // For now, we do it synchronously which will block the UI
+    match bevy_cli::install_bevy_cli() {
+        Ok(()) => {
+            editor_state.game_settings_dialog.status_message =
+                Some("Bevy CLI installed successfully!".to_string());
+            editor_state.game_settings_dialog.cli_installed = Some(true);
+        }
+        Err(e) => {
+            editor_state.error_message = Some(format!("Failed to install Bevy CLI: {}", e));
+            editor_state.game_settings_dialog.cli_installed = Some(false);
         }
     }
 }
@@ -1424,4 +1981,82 @@ fn select_all_visible_tiles(editor_state: &mut EditorState, project: &Project) {
         level.height.saturating_sub(1),
         false,
     );
+}
+
+/// Create a stamp from the current tile selection
+fn create_stamp_from_selection(editor_state: &mut EditorState, project: &mut Project) {
+    // Need a selection with tiles
+    if editor_state.tile_selection.is_empty() {
+        return;
+    }
+
+    let Some(level_id) = editor_state.tile_selection.level_id else {
+        return;
+    };
+    let Some(layer_idx) = editor_state.tile_selection.layer_idx else {
+        return;
+    };
+
+    let Some(level) = project.get_level(level_id) else {
+        return;
+    };
+
+    // Get the layer's tileset
+    let tileset_id = level.layers.get(layer_idx).and_then(|layer| {
+        if let bevy_map_core::LayerData::Tiles { tileset_id, .. } = &layer.data {
+            Some(*tileset_id)
+        } else {
+            None
+        }
+    });
+
+    let Some(tileset_id) = tileset_id else {
+        return;
+    };
+
+    // Calculate bounds of selection
+    let mut min_x = u32::MAX;
+    let mut min_y = u32::MAX;
+    let mut max_x = 0u32;
+    let mut max_y = 0u32;
+
+    for (_, _, x, y) in &editor_state.tile_selection.tiles {
+        min_x = min_x.min(*x);
+        min_y = min_y.min(*y);
+        max_x = max_x.max(*x);
+        max_y = max_y.max(*y);
+    }
+
+    if min_x > max_x || min_y > max_y {
+        return;
+    }
+
+    let width = max_x - min_x + 1;
+    let height = max_y - min_y + 1;
+
+    // Generate a unique name
+    let stamp_count = project.stamps.len() + 1;
+    let name = format!("Stamp {}", stamp_count);
+
+    // Create the stamp
+    let mut stamp = crate::project::TileStamp::new(name, width, height, tileset_id);
+
+    // Copy tile data (with flip flags preserved)
+    for (_, _, x, y) in &editor_state.tile_selection.tiles {
+        let local_x = x - min_x;
+        let local_y = y - min_y;
+        let stamp_idx = (local_y * width + local_x) as usize;
+
+        if let Some(tile) = level.get_tile(layer_idx, *x, *y) {
+            stamp.tiles[stamp_idx] = Some(tile);
+        }
+    }
+
+    // Add to project
+    let stamp_id = stamp.id;
+    project.stamps.push(stamp);
+    project.mark_dirty();
+
+    // Select the new stamp
+    editor_state.selected_stamp = Some(stamp_id);
 }

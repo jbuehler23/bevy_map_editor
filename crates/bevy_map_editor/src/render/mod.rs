@@ -277,44 +277,53 @@ fn spawn_level_tilemaps(
         // Group tiles by image (for multi-image tilesets)
         // bevy_ecs_tilemap uses a single texture per tilemap, so we need separate tilemaps per image
         // Also track which tiles are multi-cell (they'll be rendered as Sprites instead)
-        let mut tiles_by_image: HashMap<usize, Vec<(u32, u32, u32)>> = HashMap::new();
-        let mut multi_cell_tiles: Vec<(u32, u32, u32, u32, u32, usize)> = Vec::new(); // (x, y, virtual_idx, grid_w, grid_h, image_index)
+        // Tuple: (x, y, local_tile_index, flip_x, flip_y)
+        let mut tiles_by_image: HashMap<usize, Vec<(u32, u32, u32, bool, bool)>> = HashMap::new();
+        // Tuple: (x, y, virtual_idx, grid_w, grid_h, image_index, flip_x, flip_y)
+        let mut multi_cell_tiles: Vec<(u32, u32, u32, u32, u32, usize, bool, bool)> = Vec::new();
 
         for y in 0..level.height {
             for x in 0..level.width {
                 let index = (y * level.width + x) as usize;
                 if let Some(Some(virtual_tile_index)) = tiles.get(index) {
+                    // Extract flip flags and base tile index
+                    let flip_x = bevy_map_core::tile_flip_x(*virtual_tile_index);
+                    let flip_y = bevy_map_core::tile_flip_y(*virtual_tile_index);
+                    let base_tile_index = bevy_map_core::tile_index(*virtual_tile_index);
+
                     // Skip OCCUPIED_CELL sentinel values (used for multi-cell tiles)
-                    if *virtual_tile_index == OCCUPIED_CELL {
+                    if base_tile_index == OCCUPIED_CELL {
                         continue;
                     }
 
-                    // Check if this is a multi-cell tile
-                    let (grid_width, grid_height) = tileset.get_tile_grid_size(*virtual_tile_index);
+                    // Check if this is a multi-cell tile (use base index for tileset lookup)
+                    let (grid_width, grid_height) = tileset.get_tile_grid_size(base_tile_index);
 
                     if grid_width > 1 || grid_height > 1 {
                         // Multi-cell tile - will be rendered as Sprite
-                        if let Some((image_index, _)) =
-                            tileset.virtual_to_local(*virtual_tile_index)
-                        {
+                        if let Some((image_index, _)) = tileset.virtual_to_local(base_tile_index) {
                             multi_cell_tiles.push((
                                 x,
                                 y,
-                                *virtual_tile_index,
+                                base_tile_index,
                                 grid_width,
                                 grid_height,
                                 image_index,
+                                flip_x,
+                                flip_y,
                             ));
                         }
                     } else {
                         // Regular 1x1 tile - use TileBundle
                         if let Some((image_index, local_tile_index)) =
-                            tileset.virtual_to_local(*virtual_tile_index)
+                            tileset.virtual_to_local(base_tile_index)
                         {
                             tiles_by_image.entry(image_index).or_default().push((
                                 x,
                                 y,
                                 local_tile_index,
+                                flip_x,
+                                flip_y,
                             ));
                         }
                     }
@@ -352,13 +361,18 @@ fn spawn_level_tilemaps(
             let tilemap_entity = commands.spawn_empty().id();
 
             // Spawn tiles for this image
-            for (x, y, local_tile_index) in &image_tiles {
+            for (x, y, local_tile_index, flip_x, flip_y) in &image_tiles {
                 let tile_pos = TilePos { x: *x, y: *y };
                 let tile_entity = commands
                     .spawn(TileBundle {
                         position: tile_pos,
                         tilemap_id: TilemapId(tilemap_entity),
                         texture_index: TileTextureIndex(*local_tile_index),
+                        flip: TileFlip {
+                            x: *flip_x,
+                            y: *flip_y,
+                            d: false,
+                        },
                         ..default()
                     })
                     .id();
@@ -402,7 +416,9 @@ fn spawn_level_tilemaps(
         }
 
         // Spawn multi-cell tiles as Sprites
-        for (x, y, virtual_tile_index, grid_width, grid_height, image_index) in multi_cell_tiles {
+        for (x, y, virtual_tile_index, grid_width, grid_height, image_index, flip_x, flip_y) in
+            multi_cell_tiles
+        {
             // Get texture handle and image info for this tile
             let Some(image) = tileset.images.get(image_index) else {
                 continue;
@@ -453,6 +469,8 @@ fn spawn_level_tilemaps(
                         image: texture_handle,
                         rect: Some(rect),
                         custom_size: Some(Vec2::new(src_width, src_height)),
+                        flip_x,
+                        flip_y,
                         ..default()
                     },
                     Transform::from_xyz(world_x, world_y, layer_z),
@@ -517,7 +535,21 @@ pub fn update_tile(
 
     // Skip rendering OCCUPIED_CELL sentinel values (used for multi-cell tiles)
     // Treat them as empty cells
-    let effective_tile_index = new_tile_index.filter(|&idx| idx != OCCUPIED_CELL);
+    let effective_tile_index =
+        new_tile_index.filter(|&idx| bevy_map_core::tile_index(idx) != OCCUPIED_CELL);
+
+    // Extract flip flags from tile index
+    let (flip_x, flip_y) = effective_tile_index
+        .map(|idx| {
+            (
+                bevy_map_core::tile_flip_x(idx),
+                bevy_map_core::tile_flip_y(idx),
+            )
+        })
+        .unwrap_or((false, false));
+
+    // Strip flip flags to get the actual tile index
+    let effective_tile_index = effective_tile_index.map(bevy_map_core::tile_index);
 
     // Only remove existing multi-cell sprite if we're placing a real tile here
     // (not for OCCUPIED_CELL or None, which shouldn't affect other tiles)
@@ -587,6 +619,8 @@ pub fn update_tile(
                                     image: texture_handle.clone(),
                                     rect: Some(rect),
                                     custom_size: Some(Vec2::new(src_width, src_height)),
+                                    flip_x,
+                                    flip_y,
                                     ..default()
                                 },
                                 Transform::from_xyz(world_x, world_y, layer_z),
@@ -688,12 +722,17 @@ pub fn update_tile(
                         let _ = commands.get_entity(old_entity).map(|mut e| e.despawn());
                     }
 
-                    // Spawn new tile
+                    // Spawn new tile with flip applied
                     let new_tile = commands
                         .spawn(TileBundle {
                             position: tile_pos,
                             tilemap_id: TilemapId(tilemap_entity),
                             texture_index: TileTextureIndex(local_idx),
+                            flip: TileFlip {
+                                x: flip_x,
+                                y: flip_y,
+                                d: false,
+                            },
                             ..default()
                         })
                         .id();
@@ -1725,6 +1764,7 @@ fn sync_brush_preview(
                                     ..default()
                                 },
                                 Transform::from_xyz(world_x, world_y, 179.0),
+                                Visibility::Inherited,
                                 BrushPreviewSprite,
                             ))
                             .id();
@@ -1753,6 +1793,7 @@ fn sync_brush_preview(
                                     ..default()
                                 },
                                 Transform::from_xyz(world_x, world_y, 179.0),
+                                Visibility::Inherited,
                                 BrushPreviewSprite,
                             ))
                             .id();
@@ -1775,6 +1816,7 @@ fn sync_brush_preview(
                     ..default()
                 },
                 Transform::from_xyz(world_x, world_y, 179.0),
+                Visibility::Inherited,
                 BrushPreviewSprite,
             ))
             .id();
@@ -1799,6 +1841,7 @@ fn sync_brush_preview(
                 world_y + half_height - border_thickness / 2.0,
                 181.0,
             ),
+            Visibility::Inherited,
             BrushPreviewSprite,
         ))
         .id();
@@ -1817,6 +1860,7 @@ fn sync_brush_preview(
                 world_y - half_height + border_thickness / 2.0,
                 181.0,
             ),
+            Visibility::Inherited,
             BrushPreviewSprite,
         ))
         .id();
@@ -1835,6 +1879,7 @@ fn sync_brush_preview(
                 world_y,
                 181.0,
             ),
+            Visibility::Inherited,
             BrushPreviewSprite,
         ))
         .id();
@@ -1853,6 +1898,7 @@ fn sync_brush_preview(
                 world_y,
                 181.0,
             ),
+            Visibility::Inherited,
             BrushPreviewSprite,
         ))
         .id();

@@ -63,10 +63,98 @@ pub struct MapEntityMarker {
 }
 
 /// Raw properties from the map editor, accessible by runtime systems
+///
+/// This component provides zero-code access to entity properties defined in the map editor.
+/// All entities spawned from map data will have this component attached.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use bevy::prelude::*;
+/// use bevy_map_runtime::{MapEntityMarker, EntityProperties};
+///
+/// fn handle_npcs(query: Query<(&MapEntityMarker, &EntityProperties)>) {
+///     for (marker, props) in &query {
+///         if marker.type_name == "NPC" {
+///             let name = props.get_string("name").unwrap_or("Unknown");
+///             let health = props.get_int("health").unwrap_or(100);
+///
+///             // Access array properties
+///             if let Some(items) = props.get_array("inventory") {
+///                 for item in items {
+///                     if let Some(item_obj) = item.as_object() {
+///                         let item_name = item_obj.get("name").and_then(|v| v.as_string());
+///                         // ...
+///                     }
+///                 }
+///             }
+///         }
+///     }
+/// }
+/// ```
 #[derive(Component, Debug, Clone)]
 pub struct EntityProperties {
     /// All properties as they were defined in the map editor
     pub properties: HashMap<String, Value>,
+}
+
+impl EntityProperties {
+    /// Get a string property value
+    pub fn get_string(&self, key: &str) -> Option<&str> {
+        self.properties.get(key).and_then(|v| v.as_string())
+    }
+
+    /// Get an integer property value
+    pub fn get_int(&self, key: &str) -> Option<i64> {
+        self.properties.get(key).and_then(|v| v.as_int())
+    }
+
+    /// Get a float property value
+    pub fn get_float(&self, key: &str) -> Option<f64> {
+        self.properties.get(key).and_then(|v| v.as_float())
+    }
+
+    /// Get a boolean property value
+    pub fn get_bool(&self, key: &str) -> Option<bool> {
+        self.properties.get(key).and_then(|v| v.as_bool())
+    }
+
+    /// Get an array property value
+    ///
+    /// Use this to access array properties like `Array<Item>`. Each element is a `Value`
+    /// that can be accessed with `.as_object()` for complex types or `.as_string()` for IDs.
+    pub fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
+        self.properties.get(key).and_then(|v| v.as_array())
+    }
+
+    /// Get an object/nested property value
+    ///
+    /// Use this to access embedded object properties.
+    pub fn get_object(&self, key: &str) -> Option<&HashMap<String, Value>> {
+        self.properties.get(key).and_then(|v| v.as_object())
+    }
+
+    /// Get the raw Value for a property
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        self.properties.get(key)
+    }
+
+    /// Check if a property exists
+    pub fn has(&self, key: &str) -> bool {
+        self.properties.contains_key(key)
+    }
+
+    /// Get a Vec2 from a property that stores [x, y] as an array
+    pub fn get_vec2(&self, key: &str) -> Option<Vec2> {
+        let arr = self.properties.get(key).and_then(|v| v.as_array())?;
+        if arr.len() >= 2 {
+            let x = arr[0].as_float()? as f32;
+            let y = arr[1].as_float()? as f32;
+            Some(Vec2::new(x, y))
+        } else {
+            None
+        }
+    }
 }
 
 /// Component marking an entity that has an associated dialogue

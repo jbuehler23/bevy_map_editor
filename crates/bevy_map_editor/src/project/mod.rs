@@ -17,6 +17,60 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+/// A saved tile stamp (reusable tile arrangement)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TileStamp {
+    /// Unique identifier for this stamp
+    pub id: Uuid,
+    /// User-friendly name
+    pub name: String,
+    /// Width of the stamp in tiles
+    pub width: u32,
+    /// Height of the stamp in tiles
+    pub height: u32,
+    /// The tileset this stamp uses
+    pub tileset_id: Uuid,
+    /// Tile data in row-major order (None = empty cell)
+    /// Values include flip flags encoded in the tile index
+    pub tiles: Vec<Option<u32>>,
+}
+
+impl TileStamp {
+    /// Create a new stamp with the given name and dimensions
+    pub fn new(name: String, width: u32, height: u32, tileset_id: Uuid) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            width,
+            height,
+            tileset_id,
+            tiles: vec![None; (width * height) as usize],
+        }
+    }
+
+    /// Get tile at position (returns None if out of bounds or empty)
+    pub fn get_tile(&self, x: u32, y: u32) -> Option<u32> {
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let idx = (y * self.width + x) as usize;
+        self.tiles.get(idx).copied().flatten()
+    }
+}
+
+/// Configuration for an associated game project
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GameProjectConfig {
+    /// Path to the game project directory (contains Cargo.toml)
+    pub project_path: Option<PathBuf>,
+    /// ID of the level to load when the game starts
+    pub starting_level: Option<Uuid>,
+    /// Project name (used for Cargo.toml package name)
+    pub project_name: String,
+    /// Whether to use release mode when building
+    pub use_release_build: bool,
+}
+
 /// The entire editor project
 #[derive(Debug, Clone, Serialize, Deserialize, Resource)]
 pub struct Project {
@@ -41,6 +95,12 @@ pub struct Project {
     /// World configuration (layout mode, connections)
     #[serde(default)]
     pub world_config: WorldConfig,
+    /// Saved tile stamps (reusable tile arrangements)
+    #[serde(default)]
+    pub stamps: Vec<TileStamp>,
+    /// Associated game project configuration
+    #[serde(default)]
+    pub game_config: GameProjectConfig,
     #[serde(skip)]
     pub dirty: bool,
 
@@ -69,6 +129,8 @@ impl Default for Project {
             sprite_sheets: Vec::new(),
             dialogues: Vec::new(),
             world_config: WorldConfig::default(),
+            stamps: Vec::new(),
+            game_config: GameProjectConfig::default(),
             dirty: false,
             level_index: HashMap::new(),
             tileset_index: HashMap::new(),
@@ -92,6 +154,8 @@ impl Project {
             sprite_sheets: Vec::new(),
             dialogues: Vec::new(),
             world_config: WorldConfig::default(),
+            stamps: Vec::new(),
+            game_config: GameProjectConfig::default(),
             dirty: false,
             level_index: HashMap::new(),
             tileset_index: HashMap::new(),
@@ -300,7 +364,9 @@ impl Project {
         }
 
         let new_id = duplicate.id;
+        let idx = self.levels.len();
         self.levels.push(duplicate);
+        self.level_index.insert(new_id, idx);
         self.dirty = true;
         Some(new_id)
     }
