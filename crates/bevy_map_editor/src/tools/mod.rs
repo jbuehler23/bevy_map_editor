@@ -791,9 +791,17 @@ fn handle_zoom_input(
         false
     };
 
+    // Check if any modal editors are open (mirrors viewport input handling)
+    let modal_editor_open = editor_state.show_schema_editor
+        || editor_state.show_tileset_editor
+        || editor_state.show_spritesheet_editor
+        || editor_state.show_animation_editor
+        || editor_state.show_dialogue_editor
+        || editor_state.show_settings_dialog;
+
     for event in scroll_events.read() {
-        // Skip zoom if egui is actively using pointer or cursor is over side panels
-        if egui_using_pointer || over_side_panel {
+        // Skip zoom if egui is using pointer, cursor is over side panels, or modal editors are open
+        if egui_using_pointer || over_side_panel || modal_editor_open {
             continue;
         }
         let zoom_delta = event.y * 0.1;
