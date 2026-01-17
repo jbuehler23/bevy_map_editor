@@ -4,8 +4,12 @@
 //! - Creating, editing, and deleting enums
 //! - Creating, editing, and deleting data types
 //! - Managing properties on data types with all 13 property types
+//! - Configuring entity type components (Physics, Input, Sprite)
 
 use bevy_egui::egui;
+use bevy_map_core::{
+    ColliderConfig, InputConfig, InputProfile, PhysicsBodyType, PhysicsConfig, SpriteConfig,
+};
 use bevy_map_schema::{PropType, PropertyDef, TypeDef};
 
 /// State for the schema editor
@@ -26,6 +30,8 @@ pub struct SchemaEditorState {
     pub new_type_name: String,
     pub editing_type_name: Option<String>,
     pub type_rename_buffer: String,
+    /// Subtab within type editor (Properties or Components)
+    pub type_editor_tab: TypeEditorTab,
 
     // Property editing state
     pub selected_property_idx: Option<usize>,
@@ -35,6 +41,14 @@ pub struct SchemaEditorState {
 
     // Color picker state
     pub color_picker_buffer: [f32; 3],
+}
+
+/// Subtab within the type editor
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+pub enum TypeEditorTab {
+    #[default]
+    Properties,
+    Components,
 }
 
 /// Active tab in the schema editor
@@ -543,7 +557,47 @@ fn render_type_editor(
 
     ui.separator();
 
-    // Properties section
+    // Subtab bar for Properties vs Components
+    ui.horizontal(|ui| {
+        if ui
+            .selectable_label(
+                state.type_editor_tab == TypeEditorTab::Properties,
+                "Properties",
+            )
+            .clicked()
+        {
+            state.type_editor_tab = TypeEditorTab::Properties;
+        }
+        if ui
+            .selectable_label(
+                state.type_editor_tab == TypeEditorTab::Components,
+                "Components",
+            )
+            .clicked()
+        {
+            state.type_editor_tab = TypeEditorTab::Components;
+        }
+    });
+    ui.separator();
+
+    match state.type_editor_tab {
+        TypeEditorTab::Properties => {
+            render_properties_section(ui, state, project, type_name);
+        }
+        TypeEditorTab::Components => {
+            render_components_section(ui, project, type_name);
+        }
+    }
+}
+
+/// Render the Properties section of the type editor
+fn render_properties_section(
+    ui: &mut egui::Ui,
+    state: &mut SchemaEditorState,
+    project: &mut crate::project::Project,
+    type_name: &str,
+) {
+    // Properties section header
     ui.horizontal(|ui| {
         ui.heading("Properties");
         // Use unique ID for button based on type name to avoid ID conflicts
@@ -681,6 +735,476 @@ fn render_type_editor(
                 }
             }
         });
+}
+
+/// Render the Components section of the type editor
+fn render_components_section(
+    ui: &mut egui::Ui,
+    project: &mut crate::project::Project,
+    type_name: &str,
+) {
+    ui.label(
+        egui::RichText::new(
+            "Configure automatic components for all instances of this entity type.",
+        )
+        .weak(),
+    );
+    ui.add_space(8.0);
+
+    // Get or create entity type config
+    let config = project.ensure_entity_type_config(type_name).clone();
+
+    // Physics section
+    let mut physics_enabled = config.physics.is_some();
+    let mut physics_config = config.physics.clone().unwrap_or_default();
+    let physics_changed =
+        render_physics_config(ui, type_name, &mut physics_enabled, &mut physics_config);
+
+    // Input section
+    let mut input_enabled = config.input.is_some();
+    let mut input_config = config.input.clone().unwrap_or_default();
+    let input_changed = render_input_config(ui, type_name, &mut input_enabled, &mut input_config);
+
+    // Sprite section
+    let mut sprite_enabled = config.sprite.is_some();
+    let mut sprite_config = config.sprite.clone().unwrap_or_default();
+    let sprite_changed = render_sprite_config(
+        ui,
+        project,
+        type_name,
+        &mut sprite_enabled,
+        &mut sprite_config,
+    );
+
+    // Apply changes
+    if physics_changed || input_changed || sprite_changed {
+        let type_config = project.ensure_entity_type_config(type_name);
+        type_config.physics = if physics_enabled {
+            Some(physics_config)
+        } else {
+            None
+        };
+        type_config.input = if input_enabled {
+            Some(input_config)
+        } else {
+            None
+        };
+        type_config.sprite = if sprite_enabled {
+            Some(sprite_config)
+        } else {
+            None
+        };
+        project.mark_dirty();
+    }
+}
+
+/// Render physics configuration section
+fn render_physics_config(
+    ui: &mut egui::Ui,
+    type_name: &str,
+    enabled: &mut bool,
+    config: &mut PhysicsConfig,
+) -> bool {
+    let mut changed = false;
+
+    egui::CollapsingHeader::new("Physics")
+        .default_open(true)
+        .id_salt(format!("physics_{}", type_name))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.checkbox(enabled, "Enable Physics").changed() {
+                    changed = true;
+                }
+            });
+
+            if *enabled {
+                ui.add_space(4.0);
+                egui::Grid::new(format!("physics_grid_{}", type_name))
+                    .num_columns(2)
+                    .spacing([10.0, 4.0])
+                    .show(ui, |ui| {
+                        // Body Type
+                        ui.label("Body Type:");
+                        let body_types = PhysicsBodyType::all();
+                        egui::ComboBox::from_id_salt(format!("body_type_{}", type_name))
+                            .selected_text(config.body_type.display_name())
+                            .show_ui(ui, |ui| {
+                                for body_type in body_types {
+                                    if ui
+                                        .selectable_label(
+                                            config.body_type == *body_type,
+                                            body_type.display_name(),
+                                        )
+                                        .clicked()
+                                    {
+                                        config.body_type = *body_type;
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.end_row();
+
+                        // Collider Type
+                        ui.label("Collider:");
+                        let collider_names = ["Box", "Capsule", "Circle"];
+                        egui::ComboBox::from_id_salt(format!("collider_{}", type_name))
+                            .selected_text(config.collider.display_name())
+                            .show_ui(ui, |ui| {
+                                for name in collider_names {
+                                    let is_selected = config.collider.display_name() == name;
+                                    if ui.selectable_label(is_selected, name).clicked()
+                                        && !is_selected
+                                    {
+                                        config.collider = match name {
+                                            "Box" => ColliderConfig::new_box(16.0, 16.0),
+                                            "Capsule" => ColliderConfig::new_capsule(14.0, 24.0),
+                                            "Circle" => ColliderConfig::new_circle(8.0),
+                                            _ => ColliderConfig::default(),
+                                        };
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.end_row();
+
+                        // Collider dimensions based on type
+                        match &mut config.collider {
+                            ColliderConfig::Box { width, height } => {
+                                ui.label("Width:");
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(width)
+                                            .range(1.0..=256.0)
+                                            .suffix(" px"),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                                ui.label("Height:");
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(height)
+                                            .range(1.0..=256.0)
+                                            .suffix(" px"),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                            }
+                            ColliderConfig::Capsule { width, height } => {
+                                ui.label("Width:");
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(width)
+                                            .range(1.0..=256.0)
+                                            .suffix(" px"),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                                ui.label("Height:");
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(height)
+                                            .range(1.0..=256.0)
+                                            .suffix(" px"),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                            }
+                            ColliderConfig::Circle { radius } => {
+                                ui.label("Radius:");
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(radius)
+                                            .range(1.0..=128.0)
+                                            .suffix(" px"),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                            }
+                        }
+
+                        // Gravity Scale
+                        ui.label("Gravity Scale:");
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut config.gravity_scale)
+                                    .range(0.0..=10.0)
+                                    .speed(0.1),
+                            )
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                        ui.end_row();
+
+                        // Lock Rotation
+                        ui.label("Lock Rotation:");
+                        if ui.checkbox(&mut config.lock_rotation, "").changed() {
+                            changed = true;
+                        }
+                        ui.end_row();
+
+                        // Friction
+                        ui.label("Friction:");
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut config.friction)
+                                    .range(0.0..=1.0)
+                                    .speed(0.05),
+                            )
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                        ui.end_row();
+
+                        // Restitution (bounciness)
+                        ui.label("Restitution:");
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut config.restitution)
+                                    .range(0.0..=1.0)
+                                    .speed(0.05),
+                            )
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                        ui.end_row();
+                    });
+            }
+        });
+
+    changed
+}
+
+/// Render input configuration section
+fn render_input_config(
+    ui: &mut egui::Ui,
+    type_name: &str,
+    enabled: &mut bool,
+    config: &mut InputConfig,
+) -> bool {
+    let mut changed = false;
+
+    egui::CollapsingHeader::new("Input")
+        .default_open(true)
+        .id_salt(format!("input_{}", type_name))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.checkbox(enabled, "Enable Input").changed() {
+                    changed = true;
+                }
+            });
+
+            if *enabled {
+                ui.add_space(4.0);
+                egui::Grid::new(format!("input_grid_{}", type_name))
+                    .num_columns(2)
+                    .spacing([10.0, 4.0])
+                    .show(ui, |ui| {
+                        // Profile
+                        ui.label("Profile:");
+                        let profiles = InputProfile::all_builtin();
+                        egui::ComboBox::from_id_salt(format!("input_profile_{}", type_name))
+                            .selected_text(config.profile.display_name())
+                            .show_ui(ui, |ui| {
+                                for profile in profiles {
+                                    if ui
+                                        .selectable_label(
+                                            config.profile.variant_name() == profile.variant_name(),
+                                            profile.display_name(),
+                                        )
+                                        .clicked()
+                                    {
+                                        config.profile = profile.clone();
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.end_row();
+
+                        // Speed
+                        ui.label("Speed:");
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut config.speed)
+                                    .range(0.0..=1000.0)
+                                    .suffix(" px/s"),
+                            )
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                        ui.end_row();
+
+                        // Jump Force (only for platformer)
+                        if matches!(config.profile, InputProfile::Platformer) {
+                            ui.label("Jump Force:");
+                            let mut jump = config.jump_force.unwrap_or(400.0);
+                            if ui
+                                .add(egui::DragValue::new(&mut jump).range(0.0..=2000.0))
+                                .changed()
+                            {
+                                config.jump_force = Some(jump);
+                                changed = true;
+                            }
+                            ui.end_row();
+
+                            ui.label("Max Fall Speed:");
+                            let mut fall = config.max_fall_speed.unwrap_or(600.0);
+                            if ui
+                                .add(egui::DragValue::new(&mut fall).range(0.0..=2000.0))
+                                .changed()
+                            {
+                                config.max_fall_speed = Some(fall);
+                                changed = true;
+                            }
+                            ui.end_row();
+                        }
+                    });
+            }
+        });
+
+    changed
+}
+
+/// Render sprite configuration section
+fn render_sprite_config(
+    ui: &mut egui::Ui,
+    project: &crate::project::Project,
+    type_name: &str,
+    enabled: &mut bool,
+    config: &mut SpriteConfig,
+) -> bool {
+    let mut changed = false;
+
+    egui::CollapsingHeader::new("Sprite")
+        .default_open(true)
+        .id_salt(format!("sprite_{}", type_name))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.checkbox(enabled, "Enable Sprite").changed() {
+                    changed = true;
+                }
+            });
+
+            if *enabled {
+                ui.add_space(4.0);
+                egui::Grid::new(format!("sprite_grid_{}", type_name))
+                    .num_columns(2)
+                    .spacing([10.0, 4.0])
+                    .show(ui, |ui| {
+                        // Sprite Sheet selector
+                        ui.label("Sprite Sheet:");
+                        let selected_name = config
+                            .sprite_sheet_id
+                            .and_then(|id| project.get_sprite_sheet(id))
+                            .map(|s| s.name.clone())
+                            .unwrap_or_else(|| "(none)".to_string());
+
+                        egui::ComboBox::from_id_salt(format!("sprite_sheet_{}", type_name))
+                            .selected_text(&selected_name)
+                            .show_ui(ui, |ui| {
+                                // None option
+                                if ui
+                                    .selectable_label(config.sprite_sheet_id.is_none(), "(none)")
+                                    .clicked()
+                                {
+                                    config.sprite_sheet_id = None;
+                                    config.default_animation = None;
+                                    changed = true;
+                                }
+
+                                // List sprite sheets
+                                for sprite_sheet in &project.sprite_sheets {
+                                    let is_selected =
+                                        config.sprite_sheet_id == Some(sprite_sheet.id);
+                                    if ui
+                                        .selectable_label(is_selected, &sprite_sheet.name)
+                                        .clicked()
+                                    {
+                                        config.sprite_sheet_id = Some(sprite_sheet.id);
+                                        // Reset animation when sheet changes
+                                        config.default_animation =
+                                            sprite_sheet.animations.keys().next().cloned();
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.end_row();
+
+                        // Animation selector (only if sprite sheet is selected)
+                        if let Some(sheet_id) = config.sprite_sheet_id {
+                            if let Some(sprite_sheet) = project.get_sprite_sheet(sheet_id) {
+                                ui.label("Default Animation:");
+                                let selected_anim = config
+                                    .default_animation
+                                    .clone()
+                                    .unwrap_or_else(|| "(none)".to_string());
+
+                                egui::ComboBox::from_id_salt(format!("sprite_anim_{}", type_name))
+                                    .selected_text(&selected_anim)
+                                    .show_ui(ui, |ui| {
+                                        for anim_name in sprite_sheet.animations.keys() {
+                                            let is_selected = config.default_animation.as_ref()
+                                                == Some(anim_name);
+                                            if ui.selectable_label(is_selected, anim_name).clicked()
+                                            {
+                                                config.default_animation = Some(anim_name.clone());
+                                                changed = true;
+                                            }
+                                        }
+                                    });
+                                ui.end_row();
+                            }
+                        }
+
+                        // Scale
+                        ui.label("Scale:");
+                        let mut scale = config.scale.unwrap_or(1.0);
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut scale)
+                                    .range(0.1..=10.0)
+                                    .speed(0.1),
+                            )
+                            .changed()
+                        {
+                            config.scale = if (scale - 1.0).abs() < 0.01 {
+                                None
+                            } else {
+                                Some(scale)
+                            };
+                            changed = true;
+                        }
+                        ui.end_row();
+
+                        // Flip with direction
+                        ui.label("Flip w/ Direction:");
+                        if ui.checkbox(&mut config.flip_with_direction, "").changed() {
+                            changed = true;
+                        }
+                        ui.end_row();
+                    });
+            }
+        });
+
+    changed
 }
 
 /// Render the Add Property dialog
@@ -833,23 +1357,10 @@ fn render_property_form(
             egui::ComboBox::from_id_salt(format!("prop_type_{}", id_context))
                 .selected_text(state.prop_type.display_name())
                 .show_ui(ui, |ui| {
-                    // Base property types (excluding deprecated Embedded)
-                    let types = [
-                        PropType::String,
-                        PropType::Multiline,
-                        PropType::Int,
-                        PropType::Float,
-                        PropType::Bool,
-                        PropType::Enum,
-                        PropType::Ref,
-                        PropType::Array,
-                        PropType::Point,
-                        PropType::Color,
-                        PropType::Sprite,
-                        PropType::Dialogue,
-                    ];
-                    for t in types {
-                        ui.selectable_value(&mut state.prop_type, t, t.display_name());
+                    // Base property types (excluding deprecated types like Sprite, Embedded)
+                    // Use all_active() which returns only non-deprecated types
+                    for t in PropType::all_active() {
+                        ui.selectable_value(&mut state.prop_type, *t, t.display_name());
                     }
 
                     // Add custom data types dynamically

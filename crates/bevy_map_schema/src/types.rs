@@ -139,12 +139,20 @@ pub enum PropType {
     Embedded,
     Point,
     Color,
+    /// DEPRECATED: Use SpriteConfig in EntityTypeConfig instead.
+    /// Sprite configuration should be at the entity type level, not per-instance.
+    /// This variant is kept for backwards compatibility with existing projects.
+    #[deprecated(
+        since = "0.3.0",
+        note = "Use SpriteConfig in EntityTypeConfig instead. Sprite configuration should be at the entity type level."
+    )]
     Sprite,
     Dialogue,
 }
 
 impl PropType {
     pub fn display_name(&self) -> &'static str {
+        #[allow(deprecated)]
         match self {
             PropType::String => "String",
             PropType::Multiline => "Multiline",
@@ -157,9 +165,32 @@ impl PropType {
             PropType::Embedded => "Embedded",
             PropType::Point => "Point",
             PropType::Color => "Color",
-            PropType::Sprite => "Sprite",
+            PropType::Sprite => "Sprite (Deprecated)",
             PropType::Dialogue => "Dialogue Tree",
         }
+    }
+
+    /// Check if this property type is deprecated
+    #[allow(deprecated)]
+    pub fn is_deprecated(&self) -> bool {
+        matches!(self, PropType::Sprite)
+    }
+
+    /// Get all non-deprecated property types for UI display
+    pub fn all_active() -> &'static [PropType] {
+        &[
+            PropType::String,
+            PropType::Multiline,
+            PropType::Int,
+            PropType::Float,
+            PropType::Bool,
+            PropType::Enum,
+            PropType::Ref,
+            PropType::Array,
+            PropType::Point,
+            PropType::Color,
+            PropType::Dialogue,
+        ]
     }
 }
 
