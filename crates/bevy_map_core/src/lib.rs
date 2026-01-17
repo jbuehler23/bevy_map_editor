@@ -7,9 +7,11 @@
 //! - `EntityInstance` - Placed entities with properties
 //! - `Value` - Generic property value type
 //! - `MapProject` - Self-contained format bundling level and tilesets
+//! - `EntityTypeConfig` - Type-level component configurations (physics, input, sprite)
 
 mod collision;
 mod entity;
+mod entity_type_config;
 mod layer;
 mod level;
 mod project;
@@ -19,6 +21,10 @@ mod world;
 
 pub use collision::{CollisionData, CollisionShape, OneWayDirection, PhysicsBody};
 pub use entity::EntityInstance;
+pub use entity_type_config::{
+    ColliderConfig, EntityTypeConfig, InputConfig, InputProfile, PhysicsBodyType, PhysicsConfig,
+    SpriteConfig,
+};
 pub use layer::{
     tile_flip_x, tile_flip_y, tile_index, tile_with_flips, toggle_flip_x, toggle_flip_y, Layer,
     LayerData, LayerType, OCCUPIED_CELL, TILE_FLIP_MASK, TILE_FLIP_X, TILE_FLIP_Y, TILE_INDEX_MASK,

@@ -128,13 +128,22 @@ pub use bevy_map_dialogue;
 
 pub mod camera;
 pub mod collision;
+pub mod entity_input;
+pub mod entity_physics;
 pub mod entity_registry;
+pub mod entity_sprite;
 pub mod loader;
 pub mod render;
 
 // Re-export commonly used types
 pub use camera::{clamp_camera_to_bounds, setup_camera_bounds_from_map, CameraBounds};
 pub use collision::{MapCollider, MapCollisionPlugin};
+pub use entity_input::{
+    CustomInput, EntityInputSpawned, MapEntityInputPlugin, PlatformerInput, TopDownInput,
+    TwinStickInput,
+};
+pub use entity_physics::{EntityPhysicsSpawned, MapEntityPhysicsPlugin};
+pub use entity_sprite::{EntitySpriteSetup, EntitySpriteSpawned, MapEntitySpritePlugin};
 pub use entity_registry::{
     attach_dialogues, Dialogue, EntityProperties, EntityRegistry, MapEntityExt, MapEntityMarker,
     MapEntityType,

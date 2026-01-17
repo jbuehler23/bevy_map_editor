@@ -8,7 +8,7 @@
 //! - `MapProject`: Simple format with HashMap collections (for hand-crafted JSON)
 //! - `EditorProject`: Full editor format with array collections (exported by the editor)
 
-use crate::{Level, Tileset};
+use crate::{EntityTypeConfig, Level, Tileset};
 use bevy_map_animation::SpriteData;
 use bevy_map_dialogue::DialogueTree;
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,9 @@ pub struct EditorProject {
     /// Dialogues as array
     #[serde(default)]
     pub dialogues: Vec<DialogueTree>,
+    /// Entity type component configurations (physics, input, sprite per type)
+    #[serde(default)]
+    pub entity_type_configs: HashMap<String, EntityTypeConfig>,
 }
 
 impl EditorProject {
@@ -98,7 +101,13 @@ impl EditorProject {
             tilesets,
             sprite_sheets,
             dialogues,
+            entity_type_configs: self.entity_type_configs.clone(),
         })
+    }
+
+    /// Get entity type config by type name
+    pub fn get_entity_type_config(&self, type_name: &str) -> Option<&EntityTypeConfig> {
+        self.entity_type_configs.get(type_name)
     }
 }
 
@@ -130,6 +139,9 @@ pub struct MapProject {
     /// Dialogue trees used by this level, keyed by their ID
     #[serde(default)]
     pub dialogues: HashMap<String, DialogueTree>,
+    /// Entity type component configurations (physics, input, sprite per type)
+    #[serde(default)]
+    pub entity_type_configs: HashMap<String, EntityTypeConfig>,
 }
 
 impl MapProject {
@@ -142,6 +154,7 @@ impl MapProject {
             tilesets: tileset_map,
             sprite_sheets: HashMap::new(),
             dialogues: HashMap::new(),
+            entity_type_configs: HashMap::new(),
         }
     }
 
@@ -159,7 +172,13 @@ impl MapProject {
             tilesets: tileset_map,
             sprite_sheets: sprite_sheet_map,
             dialogues: HashMap::new(),
+            entity_type_configs: HashMap::new(),
         }
+    }
+
+    /// Get entity type config by type name
+    pub fn get_entity_type_config(&self, type_name: &str) -> Option<&EntityTypeConfig> {
+        self.entity_type_configs.get(type_name)
     }
 
     /// Get a sprite sheet by ID

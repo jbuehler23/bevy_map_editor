@@ -637,6 +637,7 @@ fn render_dialogue_inspector(
 // ============================================================================
 
 /// Get a default value for a property based on its definition
+#[allow(deprecated)] // PropType::Sprite is deprecated but we still handle it for backwards compat
 pub fn get_default_value(prop_def: &bevy_map_schema::PropertyDef) -> bevy_map_core::Value {
     use bevy_map_core::Value;
     use bevy_map_schema::PropType;
@@ -710,6 +711,7 @@ fn parse_hex_color_to_rgb(hex: &str) -> [f32; 3] {
 /// Render a property value editor based on its type
 /// Returns Some(type_name) if user clicks "Create New" for an Array property
 #[allow(clippy::too_many_arguments)]
+#[allow(deprecated)] // PropType::Sprite is deprecated but we still handle it for backwards compat
 fn render_property_value_editor(
     ui: &mut egui::Ui,
     prop_def: &bevy_map_schema::PropertyDef,

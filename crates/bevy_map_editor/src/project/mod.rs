@@ -9,7 +9,7 @@ pub use file::*;
 use bevy::prelude::Resource;
 use bevy_map_animation::SpriteData;
 use bevy_map_autotile::AutotileConfig;
-use bevy_map_core::{Level, Tileset, WorldConfig};
+use bevy_map_core::{EntityTypeConfig, Level, Tileset, WorldConfig};
 use bevy_map_dialogue::DialogueTree;
 use bevy_map_schema::Schema;
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,9 @@ pub struct Project {
     /// Associated game project configuration
     #[serde(default)]
     pub game_config: GameProjectConfig,
+    /// Entity type component configurations (physics, input, sprite per type)
+    #[serde(default)]
+    pub entity_type_configs: HashMap<String, EntityTypeConfig>,
     #[serde(skip)]
     pub dirty: bool,
 
@@ -131,6 +134,7 @@ impl Default for Project {
             world_config: WorldConfig::default(),
             stamps: Vec::new(),
             game_config: GameProjectConfig::default(),
+            entity_type_configs: HashMap::new(),
             dirty: false,
             level_index: HashMap::new(),
             tileset_index: HashMap::new(),
@@ -156,12 +160,46 @@ impl Project {
             world_config: WorldConfig::default(),
             stamps: Vec::new(),
             game_config: GameProjectConfig::default(),
+            entity_type_configs: HashMap::new(),
             dirty: false,
             level_index: HashMap::new(),
             tileset_index: HashMap::new(),
             sprite_sheet_index: HashMap::new(),
             dialogue_index: HashMap::new(),
         }
+    }
+
+    /// Get entity type config by type name
+    pub fn get_entity_type_config(&self, type_name: &str) -> Option<&EntityTypeConfig> {
+        self.entity_type_configs.get(type_name)
+    }
+
+    /// Get mutable entity type config by type name
+    pub fn get_entity_type_config_mut(&mut self, type_name: &str) -> Option<&mut EntityTypeConfig> {
+        self.dirty = true;
+        self.entity_type_configs.get_mut(type_name)
+    }
+
+    /// Set entity type config for a type
+    pub fn set_entity_type_config(&mut self, type_name: &str, config: EntityTypeConfig) {
+        self.entity_type_configs.insert(type_name.to_string(), config);
+        self.dirty = true;
+    }
+
+    /// Remove entity type config for a type
+    pub fn remove_entity_type_config(&mut self, type_name: &str) -> Option<EntityTypeConfig> {
+        self.dirty = true;
+        self.entity_type_configs.remove(type_name)
+    }
+
+    /// Ensure a type has an entity type config (creates default if missing)
+    pub fn ensure_entity_type_config(&mut self, type_name: &str) -> &mut EntityTypeConfig {
+        if !self.entity_type_configs.contains_key(type_name) {
+            self.entity_type_configs
+                .insert(type_name.to_string(), EntityTypeConfig::default());
+            self.dirty = true;
+        }
+        self.entity_type_configs.get_mut(type_name).unwrap()
     }
 
     /// Rebuild all lookup indices. Call after loading or bulk modifications.
