@@ -250,7 +250,7 @@
         {
           "id": "d9d8deb0-b39d-47df-9f11-a0bfe40fdaa4",
           "name": "Main",
-          "path": "C:/Dev/Workspace/bevy_map_editor/examples/assets/tiles/TilesetFloor.png",
+          "path": "tiles/TilesetFloor.png",
           "columns": 22,
           "rows": 26
         }
@@ -294,7 +294,7 @@
           }
         }
       },
-      "path": "C:/Dev/Workspace/bevy_map_editor/examples/assets/tiles/TilesetFloor.png",
+      "path": "tiles/TilesetFloor.png",
       "columns": 22,
       "rows": 26
     },
@@ -306,7 +306,7 @@
         {
           "id": "6f64d3d9-2795-4976-a689-e51367c9f913",
           "name": "Main",
-          "path": "C:/Dev/Workspace/bevy_map_editor/examples/assets/tiles/TilesetNature.png",
+          "path": "tiles/TilesetNature.png",
           "columns": 24,
           "rows": 21
         }
@@ -378,7 +378,7 @@
           "grid_height": 2
         }
       },
-      "path": "C:/Dev/Workspace/bevy_map_editor/examples/assets/tiles/TilesetNature.png",
+      "path": "tiles/TilesetNature.png",
       "columns": 24,
       "rows": 21
     }
