@@ -316,6 +316,7 @@ fn handle_viewport_input(
                     &mut editor_state,
                     &mut project,
                     &mut render_state,
+                    &mut history,
                     world_pos,
                 );
             }
@@ -1868,6 +1869,7 @@ fn fill_area(
     editor_state: &mut EditorState,
     project: &mut Project,
     render_state: &mut RenderState,
+    history: &mut CommandHistory,
     world_pos: Vec2,
 ) {
     let Some(level_id) = editor_state.selected_level else {
@@ -1932,6 +1934,8 @@ fn fill_area(
     let mut stack = vec![(start_x as u32, start_y as u32)];
     let mut visited = std::collections::HashSet::new();
 
+    let mut tiles = HashMap::new();
+
     while let Some((x, y)) = stack.pop() {
         if visited.contains(&(x, y)) {
             continue;
@@ -1942,7 +1946,7 @@ fn fill_area(
             continue;
         }
 
-        level.set_tile(layer_idx, x, y, Some(tile_index));
+        tiles.insert((x, y), (target_tile, Some(tile_index)));
 
         if x > 0 {
             stack.push((x - 1, y));
@@ -1958,8 +1962,8 @@ fn fill_area(
         }
     }
 
-    project.mark_dirty();
-    render_state.needs_rebuild = true;
+    let command = BatchTileCommand::new(level_id, layer_idx, tiles, "Fill area");
+    history.execute(Box::new(command), project, render_state);
 }
 
 /// Paint a terrain tile with autotiling at the given world position
